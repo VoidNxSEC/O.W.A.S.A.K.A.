@@ -226,9 +226,8 @@
             gh # GitHub CLI
 
             # === Frontend Development ===
-            nodejs_24 # Node.js 20 LTS
-            nodePackages.npm # npm
-            nodePackages.pnpm # pnpm (faster alternative)
+            nodejs_24 
+            pnpm # pnpm (faster alternative)
 
             # === Browser Integration ===
             firefox-esr # Firefox ESR for browser integration
@@ -270,6 +269,7 @@
 
             # System Libraries
             libpcap # Required for gopacket
+	    libcap
           ];
 
           # Environment variables
