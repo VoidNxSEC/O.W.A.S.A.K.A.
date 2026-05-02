@@ -11,7 +11,7 @@
       self,
       nixpkgs,
       flake-utils,
-    }:
+    }@inputs:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
@@ -360,7 +360,7 @@
           version = "0.1.0-dev";
           src = ./.;
 
-          vendorHash = null; # Will be computed on first build
+          vendorHash = "sha256-WVWZxhWBXmt3kZGljQKdXBf2RdMfL0lXMtja3S3CUWw=";
 
           # CGO dependencies (gopacket/pcap requires libpcap)
           nativeBuildInputs = [ pkgs.pkg-config ];
@@ -384,5 +384,122 @@
           program = "${self.packages.${system}.default}/bin/oswaka";
         };
       }
-    );
+    ) // {
+
+    # ── Overlay ────────────────────────────────────────────────────────────────
+    # Allows other flakes to add oswaka to their pkgs set:
+    #   pkgs = import nixpkgs { overlays = [ owasaka.overlays.default ]; };
+    overlays.default = final: prev: {
+      oswaka = self.packages.${final.system}.default;
+    };
+
+    # ── NixOS Module ───────────────────────────────────────────────────────────
+    # Usage in a NixOS configuration:
+    #   imports = [ owasaka.nixosModules.default ];
+    #   services.owasaka.enable = true;
+    nixosModules.default =
+      { config
+      , lib
+      , pkgs
+      , ...
+      }:
+      let
+        cfg = config.services.owasaka;
+      in
+      {
+        options.services.owasaka = {
+          enable = lib.mkEnableOption "O.W.A.S.A.K.A. SIEM";
+
+          package = lib.mkOption {
+            type = lib.types.package;
+            default = self.packages.${pkgs.system}.default;
+            defaultText = "owasaka";
+            description = "The owasaka package to use.";
+          };
+
+          configFile = lib.mkOption {
+            type = lib.types.path;
+            description = "Path to the owasaka YAML configuration file.";
+          };
+
+          apiPort = lib.mkOption {
+            type = lib.types.port;
+            default = 8080;
+            description = "Port for the HTTP/WebSocket API.";
+          };
+
+          proxyPort = lib.mkOption {
+            type = lib.types.port;
+            default = 8888;
+            description = "Port for the transparent MITM proxy.";
+          };
+
+          openFirewall = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Open firewall port for the API (not the proxy — keep it local).";
+          };
+
+          user = lib.mkOption {
+            type = lib.types.str;
+            default = "owasaka";
+          };
+
+          group = lib.mkOption {
+            type = lib.types.str;
+            default = "owasaka";
+          };
+        };
+
+        config = lib.mkIf cfg.enable {
+          users.users.${cfg.user} = {
+            isSystemUser = true;
+            group = cfg.group;
+            description = "O.W.A.S.A.K.A. SIEM daemon";
+            home = "/var/lib/owasaka";
+          };
+          users.groups.${cfg.group} = { };
+
+          systemd.services.owasaka = {
+            description = "O.W.A.S.A.K.A. SIEM";
+            documentation = [ "https://github.com/marcosfpina/O.W.A.S.A.K.A" ];
+            after = [ "network-online.target" ];
+            wants = [ "network-online.target" ];
+            wantedBy = [ "multi-user.target" ];
+
+            serviceConfig = {
+              Type = "simple";
+              User = cfg.user;
+              Group = cfg.group;
+              ExecStart = "${cfg.package}/bin/oswaka -config ${cfg.configFile}";
+              Restart = "on-failure";
+              RestartSec = "5s";
+
+              # State & log dirs (created automatically by systemd)
+              StateDirectory = "owasaka";
+              LogsDirectory = "owasaka";
+              RuntimeDirectory = "owasaka";
+
+              # Hardening
+              NoNewPrivileges = true;
+              ProtectSystem = "strict";
+              ProtectHome = true;
+              PrivateTmp = true;
+              PrivateDevices = true;
+              CapabilityBoundingSet = [
+                # Needed for raw socket / packet capture
+                "CAP_NET_RAW"
+                "CAP_NET_ADMIN"
+              ];
+              AmbientCapabilities = [
+                "CAP_NET_RAW"
+                "CAP_NET_ADMIN"
+              ];
+            };
+          };
+
+          networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ cfg.apiPort ];
+        };
+      };
+  };
 }
