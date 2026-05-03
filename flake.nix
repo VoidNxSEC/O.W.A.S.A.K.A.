@@ -226,7 +226,7 @@
             gh # GitHub CLI
 
             # === Frontend Development ===
-            nodejs_24 
+            nodejs_24
             pnpm # pnpm (faster alternative)
 
             # === Browser Integration ===
@@ -462,7 +462,7 @@
 
           systemd.services.owasaka = {
             description = "O.W.A.S.A.K.A. SIEM";
-            documentation = [ "https://github.com/marcosfpina/O.W.A.S.A.K.A" ];
+            documentation = [ "https://github.com/VoidNxSEC/O.W.A.S.A.K.A" ];
             after = [ "network-online.target" ];
             wants = [ "network-online.target" ];
             wantedBy = [ "multi-user.target" ];
