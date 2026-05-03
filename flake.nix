@@ -235,7 +235,7 @@
             # === Network Analysis Tools (PHASE 1) ===
             nmap # Network scanner
             tcpdump # Packet capture
-            wireshark-cli # tshark for packet analysis
+             # tshark for packet analysis
             bind # dig, host, nslookup
             iproute2 # ip command
             netcat-gnu # nc for network testing
