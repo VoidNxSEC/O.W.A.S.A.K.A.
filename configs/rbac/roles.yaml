@@ -1,0 +1,71 @@
+# OWASAKA — RBAC policy
+#
+# Source of truth for "who can do what" on this OWASAKA instance.
+# Loaded at startup and on every SIGHUP or admin reload. See
+# ADR-0061 for the design rationale and docs/auth/AUTHZ.md for the
+# operator guide, including how to add roles beyond the baseline
+# (analyst, responder, rule-author, break-glass, etc.) via
+# docs/auth/ROLE_RECIPES.md.
+#
+# Discipline:
+#   - Edit this file in git. Audit history is the audit history.
+#   - Keep `admin` definitive (`*:admin`). The validator refuses to
+#     load a policy without a *:admin grant — lockout protection.
+#   - Add roles, never bend the baseline four out of shape.
+#   - `inherits:` is a load-time aggregation aid, not a runtime
+#     hierarchy. Cycles and unknown parents are rejected at load.
+
+version: 1
+
+roles:
+  # ── viewer ────────────────────────────────────────────────────────────
+  # Read-only operational access. Use for: dashboards, junior helpers,
+  # any human/agent that should *see* what the SIEM is doing without
+  # being able to change anything. Cannot view audit logs or other
+  # principals' lifecycle — that's `auditor`.
+  viewer:
+    description: "Read-only operational access"
+    permissions:
+      - { resource: events,   action: read }
+      - { resource: assets,   action: read }
+      - { resource: rules,    action: read }
+      - { resource: topology, action: read }
+      - { resource: ml,       action: read }
+
+  # ── auditor ───────────────────────────────────────────────────────────
+  # Compliance review. Sees the audit trail and the lifecycle of
+  # principals/tokens, but NOT operational data. Cannot read its own
+  # audit entries (`subject: not-self`) — prevents self-erasure.
+  # Use for: external auditor access, ISO/SOC 2/NIST evidence reviews.
+  auditor:
+    description: "Compliance review; audit log + lifecycle read"
+    permissions:
+      - { resource: audit,      action: read, conditions: { subject: not-self } }
+      - { resource: principals, action: read }
+      - { resource: tokens,     action: read }
+
+  # ── admin ─────────────────────────────────────────────────────────────
+  # Owner. Full access via the `*:admin` wildcard. Required for
+  # principal provisioning, policy editing, key rotation. Assign
+  # sparingly; for solo deployments this is the only role you'll use
+  # day-to-day.
+  admin:
+    description: "Owner; full access"
+    permissions:
+      - { resource: '*', action: admin }
+
+  # ── service ───────────────────────────────────────────────────────────
+  # Ecosystem peers (Spectre, Cerebro, future ingestors). Distinguish
+  # which service is which via the mTLS cert's CommonName, expressed
+  # here as the `cn` condition. New ecosystem peers append a condition
+  # line; the role itself stays narrow.
+  #
+  # Spectre publishes events into the bus. Cerebro consumes for RAG.
+  # Bidirectional services would need both lines + a different cn.
+  service:
+    description: "Ecosystem peer (Spectre, Cerebro, ingestors)"
+    permissions:
+      - { resource: events, action: write, conditions: { cn: spectre } }
+      - { resource: events, action: read,  conditions: { cn: cerebro } }
+      # Add new ecosystem services here, e.g.:
+      # - { resource: events, action: read, conditions: { cn: <service-cn> } }
