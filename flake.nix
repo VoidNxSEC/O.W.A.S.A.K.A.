@@ -249,6 +249,8 @@
             # === Security Tools ===
             openssl # SSL/TLS toolkit
             gnupg # GPG for signing
+            sops # Secrets OPerationS — encrypted secrets in git (ADR-0059 T9)
+            age # Modern asymmetric encryption used by sops
 
             # === Documentation ===
             mdbook # Markdown book generator

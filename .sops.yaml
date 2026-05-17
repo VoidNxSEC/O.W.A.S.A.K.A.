@@ -1,0 +1,36 @@
+# OWASAKA — SOPS configuration
+#
+# Configures which files are encrypted with which age recipients.
+# See ADR-0059 (Identity Model and Authentication Strategy) §"Secrets
+# management" and `docs/secrets/BOOTSTRAP.md` for first-run setup.
+#
+# Multi-recipient pattern: ADD recipients here as operators or services
+# need decryption access. NEVER remove the breakglass recipient without
+# verifying at least one other is operational.
+#
+# Workflow:
+#   sops --encrypt --in-place secrets.yaml          # encrypt
+#   sops secrets.yaml                                # edit (auto-encrypts)
+#   sops --decrypt secrets.yaml > secrets.dec.yaml   # one-off decrypt
+#
+# Bootstrap a new keypair:
+#   age-keygen -o ~/.config/sops/age/keys.txt
+#   age-keygen -y ~/.config/sops/age/keys.txt        # print public recipient
+
+creation_rules:
+  # Production / shared secrets.
+  - path_regex: ^secrets\.yaml$
+    age: >-
+      # REPLACE: paste each operator's age public key (starts with "age1...").
+      # Comma-separate multiple recipients.
+      # Example:
+      # age1qy3rrjkxr5d3z2lz7eajrqkpdv2mhxq2hd6scnumgj97vp0p55sqp4lqsr,age1q9...
+
+  # Per-environment secrets (dev, staging) follow the same pattern but
+  # may have a narrower recipient list.
+  - path_regex: ^secrets\.dev\.yaml$
+    age: >-
+      # Dev recipients only — never the same key as production.
+
+# Default key derivation: age (modern, simple). GPG fallback intentionally
+# omitted — sops supports it but voidnxlabs standardizes on age.
