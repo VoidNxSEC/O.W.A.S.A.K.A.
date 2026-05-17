@@ -1,3 +1,22 @@
+# =============================================================================
+# DEPRECATED — Legacy Wazuh stack
+# =============================================================================
+# This Compose file boots the original Wazuh SIEM that OWASAKA supersedes.
+# It is retained only so `make docker-down` can stop any still-running
+# containers during the cutover. New work MUST NOT depend on this stack.
+#
+# Credentials previously hardcoded in this file have been moved to sops-
+# encrypted `secrets.yaml` (see ADR-0059 §"Secrets management" and
+# docs/secrets/BOOTSTRAP.md). To run the legacy stack, decrypt with sops
+# and pass via env-file:
+#
+#   sops -d secrets.yaml > secrets.dec.yaml
+#   # Author a .env from the legacy_wazuh.* keys, then:
+#   docker compose --env-file .env up -d
+#   shred -u secrets.dec.yaml
+#
+# Slated for removal once Wazuh data migration completes (Sprint 4+).
+# =============================================================================
 version: '3.8'
 
 services:
@@ -41,14 +60,14 @@ services:
       - "55000:55000"   # API
     environment:
       - INDEXER_URL=http://wazuh-indexer:9200
-      - INDEXER_USERNAME=admin
-      - INDEXER_PASSWORD=SecretPassword
+      - INDEXER_USERNAME=${INDEXER_USERNAME:?missing — decrypt secrets.yaml}
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD:?missing — decrypt secrets.yaml}
       - FILEBEAT_SSL_VERIFICATION_MODE=none
       - SSL_CERTIFICATE_AUTHORITIES=""
       - SSL_CERTIFICATE=""
       - SSL_KEY=""
-      - API_USERNAME=wazuh-wui
-      - API_PASSWORD=MyS3cr37P450r.*-
+      - API_USERNAME=${API_USERNAME:?missing — decrypt secrets.yaml}
+      - API_PASSWORD=${API_PASSWORD:?missing — decrypt secrets.yaml}
     volumes:
       - wazuh-manager-config:/var/ossec/etc
       - wazuh-manager-logs:/var/ossec/logs
@@ -74,11 +93,11 @@ services:
     ports:
       - "5601:5601"
     environment:
-      - INDEXER_USERNAME=admin
-      - INDEXER_PASSWORD=SecretPassword
+      - INDEXER_USERNAME=${INDEXER_USERNAME:?missing — decrypt secrets.yaml}
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD:?missing — decrypt secrets.yaml}
       - WAZUH_API_URL=https://wazuh-manager
-      - API_USERNAME=wazuh-wui
-      - API_PASSWORD=MyS3cr37P450r.*-
+      - API_USERNAME=${API_USERNAME:?missing — decrypt secrets.yaml}
+      - API_PASSWORD=${API_PASSWORD:?missing — decrypt secrets.yaml}
       - OPENSEARCH_HOSTS=http://wazuh-indexer:9200
     volumes:
       - wazuh-dashboard-config:/usr/share/wazuh-dashboard/config
