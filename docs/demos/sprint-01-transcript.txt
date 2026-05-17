@@ -1,0 +1,81 @@
+=== RUN   TestSprint1Demo
+
+╔══════════════════════════════════════════════════════════════╗
+║   OWASAKA SIEM — Sprint 1 acceptance demo                    ║
+║   Scenario: register Alice → login → call API → revoke       ║
+╚══════════════════════════════════════════════════════════════╝
+
+────────────────────────────────────────────────────────────
+  STEP 1 — Bootstrap PKI (root CA + JWT signing key)
+────────────────────────────────────────────────────────────
+  Root CA id=96c3d996 fingerprint=33:ba:47:f6:e8:b4:49:ec…
+  JWT signing key id=716df935 expires=2026-05-18T20:10:16-03:00
+
+────────────────────────────────────────────────────────────
+  STEP 2 — Provision Alice (Human) with password + TOTP
+────────────────────────────────────────────────────────────
+  Principal id=p-alice subject=alice status=active
+  TOTP enrollment URL: otpauth://totp/OWASAKA:alice?algorithm=SHA1&digits=6&issuer=OWASAKA&period=30&secret=<redacted>
+
+────────────────────────────────────────────────────────────
+  STEP 3 — Stand up API server with auth middleware + JWKS endpoint
+────────────────────────────────────────────────────────────
+  Server listening at http://127.0.0.1:41767
+  Public endpoints:
+    GET /.well-known/jwks.json   (no auth)
+    GET /api/me                  (auth required)
+
+────────────────────────────────────────────────────────────
+  STEP 4 — Alice authenticates: password + TOTP → JWT pair
+────────────────────────────────────────────────────────────
+  Credential factors verified (password + TOTP)
+  Issued access token: eyJhbGciOiJFZERTQSIsImtpZCI6IjcxNmRmOTM1… (exp=2026-05-17T20:25:16-03:00, jti=dc7330f6-fab7-41e8-b59b-e61c46481ab5)
+  Issued refresh token: eyJhbGciOiJFZERTQSIsImtpZCI6IjcxNmRmOTM1… (exp=2026-05-18T20:10:16-03:00)
+  Signed with kid=716df935
+
+────────────────────────────────────────────────────────────
+  STEP 5 — Authenticated request → 200 with principal payload
+────────────────────────────────────────────────────────────
+  GET /api/me → 200
+  Response: {"id":"p-alice","subject":"alice","type":"human"}
+
+────────────────────────────────────────────────────────────
+  STEP 6 — Fetch JWKS (what Spectre/Cerebro do to verify tokens)
+────────────────────────────────────────────────────────────
+  JWKS published 1 key(s)
+    kid=716df935 alg=EdDSA crv=Ed25519 use=sig
+
+────────────────────────────────────────────────────────────
+  STEP 7 — Independent verification using only the JWKS
+────────────────────────────────────────────────────────────
+  ✓ A signature produced by OWASAKA verifies against the JWKS key
+    → Spectre / Cerebro can independently verify any signed material
+
+────────────────────────────────────────────────────────────
+  STEP 8 — Preview: sign a NetworkEvent payload (ADR-EventSigning, Sprint 3)
+────────────────────────────────────────────────────────────
+  Event payload: {"type":"DNS","src":"10.0.0.5","dst":"1.1.1.1","ts":1716000000}
+  Ed25519 signature: RjWVIKVbB6sNVqBtUa_syPoMVziDZl2MDK50ieH3…
+  ✓ Downstream verified the event using only JWKS-published material
+
+────────────────────────────────────────────────────────────
+  STEP 9 — Revoke Alice's access token JTI → next call is rejected
+────────────────────────────────────────────────────────────
+  GET /api/me → 401 (revoked JTI rejected)
+
+────────────────────────────────────────────────────────────
+  STEP 10 — Suspend Alice → issuer refuses to mint new tokens
+────────────────────────────────────────────────────────────
+  Issue refused: identity: principal not active
+
+╔══════════════════════════════════════════════════════════════╗
+║   ✓ Sprint 1 demo complete — every step passed                ║
+║                                                              ║
+║   Acceptance per ADR-0059:                                   ║
+║     • curl /api/* without token → 401              ✓         ║
+║     • Token issued, signature verifies via JWKS    ✓         ║
+║     • Independent verifier reproduces verification ✓         ║
+║     • Revoked JTI is rejected immediately          ✓         ║
+║     • Suspended Principal cannot mint new tokens   ✓         ║
+╚══════════════════════════════════════════════════════════════╝
+--- PASS: TestSprint1Demo (0.53s)

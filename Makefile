@@ -91,6 +91,10 @@ test-integration: ## Run integration tests
 	@echo "$(CYAN)Running integration tests...$(NC)"
 	$(GO) test -v -tags=integration ./...
 
+demo-sprint1: ## Run the Sprint 1 authentication end-to-end demo (asciinema-friendly)
+	@echo "$(CYAN)Running Sprint 1 auth demo...$(NC)"
+	$(GO) test -tags=demo -v -count=1 ./internal/identity/demo/...
+
 benchmark: ## Run benchmarks
 	@echo "$(CYAN)Running benchmarks...$(NC)"
 	$(GO) test -bench=. -benchmem ./...
