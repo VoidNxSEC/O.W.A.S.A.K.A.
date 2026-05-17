@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/VoidNxSEC/O.W.A.S.A.K.A/pkg/config"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/pkg/config"
 )
 
 // Logger wraps zap.SugaredLogger for structured logging
