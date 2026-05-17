@@ -374,7 +374,7 @@
           meta = with pkgs.lib; {
             description = "O.W.A.S.A.K.A. SIEM - Air-gapped Security Monitoring Platform";
             homepage = "https://github.com/marcosfpina/O.W.A.S.A.K.A";
-            license = licenses.proprietary;
+            license = licenses.unfree;
             maintainers = [ "marcosfpina" ];
             platforms = platforms.linux;
           };
@@ -453,9 +453,56 @@
               type = lib.types.str;
               default = "owasaka";
             };
+
+            # ── Secrets (ADR-0059 §"Secrets management") ─────────────────────────
+            # Operators set both options to enable sops-encrypted secret loading.
+            # The age private key is loaded via systemd LoadCredential so the
+            # file never leaves systemd's purview and is only readable by this
+            # unit. The encrypted secrets.yaml is read by the application at
+            # startup and never written back in plaintext.
+
+            secretsFile = lib.mkOption {
+              type = lib.types.nullOr lib.types.path;
+              default = null;
+              example = "/etc/owasaka/secrets.yaml";
+              description = ''
+                Path to the sops-encrypted `secrets.yaml`. When non-null the
+                application reads it at startup and decrypts using the age
+                key provided by `ageKeyFile`. See `docs/secrets/BOOTSTRAP.md`.
+              '';
+            };
+
+            ageKeyFile = lib.mkOption {
+              type = lib.types.nullOr lib.types.path;
+              default = null;
+              example = "/run/secrets/owasaka-age-key";
+              description = ''
+                Path to the age private key file (containing
+                `AGE-SECRET-KEY-...`). Loaded into the systemd unit via
+                LoadCredential so only the owasaka process can read it.
+                Required when `secretsFile` is set; ignored otherwise.
+
+                Recommended sources, in order of preference:
+                  1. sops-nix (`config.sops.secrets.owasaka-age-key.path`)
+                  2. systemd-creds encrypted credential
+                  3. agenix
+                  4. Plain file at 0400, owned by root (least preferred)
+              '';
+            };
           };
 
           config = lib.mkIf cfg.enable {
+            assertions = [
+              {
+                assertion = (cfg.secretsFile == null) == (cfg.ageKeyFile == null);
+                message = ''
+                  services.owasaka.secretsFile and services.owasaka.ageKeyFile
+                  must be set together (or both null). One without the other
+                  has no useful effect.
+                '';
+              }
+            ];
+
             users.users.${cfg.user} = {
               isSystemUser = true;
               group = cfg.group;
@@ -466,10 +513,18 @@
 
             systemd.services.owasaka = {
               description = "O.W.A.S.A.K.A. SIEM";
-              documentation = [ "https://github.com/VoidNxSEC/O.W.A.S.A.K.A" ];
+              documentation = [ "https://github.com/marcosfpina/O.W.A.S.A.K.A" ];
               after = [ "network-online.target" ];
               wants = [ "network-online.target" ];
               wantedBy = [ "multi-user.target" ];
+
+              # Surface the encrypted-secrets contract to the binary via env
+              # vars. The binary resolves the age key via SOPS_AGE_KEY_FILE
+              # and reads the encrypted file at OWASAKA_SECRETS_FILE.
+              environment = lib.mkIf (cfg.secretsFile != null) {
+                SOPS_AGE_KEY_FILE = "%d/age-key";
+                OWASAKA_SECRETS_FILE = toString cfg.secretsFile;
+              };
 
               serviceConfig = {
                 Type = "simple";
@@ -483,6 +538,15 @@
                 StateDirectory = "owasaka";
                 LogsDirectory = "owasaka";
                 RuntimeDirectory = "owasaka";
+
+                # Encrypted-secrets credential loading.
+                # systemd copies the source path into %d/age-key (mode 0400),
+                # readable only by this unit. The source file is read by
+                # systemd as root before privileges drop, so the unit user
+                # never needs filesystem access to the original path.
+                LoadCredential = lib.mkIf (cfg.ageKeyFile != null) [
+                  "age-key:${toString cfg.ageKeyFile}"
+                ];
 
                 # Hardening
                 NoNewPrivileges = true;
