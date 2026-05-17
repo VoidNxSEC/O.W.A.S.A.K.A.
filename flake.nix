@@ -362,7 +362,7 @@
           version = "0.1.0-dev";
           src = ./.;
 
-          vendorHash = "sha256-WVWZxhWBXmt3kZGljQKdXBf2RdMfL0lXMtja3S3CUWw=";
+          vendorHash = "sha256-aF1FK37/bdeu1d2Ds0zahEzX/ho0Ompv60/VBh4pnLM=";
 
           # CGO dependencies (gopacket/pcap requires libpcap)
           nativeBuildInputs = [ pkgs.pkg-config ];

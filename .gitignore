@@ -59,6 +59,10 @@ dist/
 build/
 bin/
 
+# Nix build symlink
+result
+result-*
+
 # Docker (keep docker-compose for reference but ignore runtime data)
 docker-compose.override.yml
 
