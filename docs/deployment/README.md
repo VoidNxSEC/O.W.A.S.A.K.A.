@@ -11,6 +11,7 @@ Deployment instructions for O.W.A.S.A.K.A. SIEM on dedicated air-gapped hardware
 ## Prerequisites
 
 ### Hardware Requirements
+
 - **CPU**: 4+ cores (8+ recommended)
 - **RAM**: 8GB minimum (16GB+ recommended)
 - **Storage**:
@@ -19,6 +20,7 @@ Deployment instructions for O.W.A.S.A.K.A. SIEM on dedicated air-gapped hardware
 - **Network**: Gigabit Ethernet (10GbE recommended)
 
 ### Software Requirements
+
 - **OS**: Linux (Ubuntu 22.04+ or Debian 12+ recommended)
 - **Go**: 1.22+ (for building from source)
 - **Firefox ESR**: Latest (for browser integration)
@@ -31,9 +33,10 @@ Deployment instructions for O.W.A.S.A.K.A. SIEM on dedicated air-gapped hardware
 ### Method 1: Binary Installation (Recommended)
 
 #### Step 1: Download Binary
+
 ```bash
 # Download latest release (future)
-wget https://github.com/marcosfpina/O.W.A.S.A.K.A/releases/latest/download/oswaka-linux-amd64
+wget https://github.com/VoidNxSEC/O.W.A.S.A.K.A/releases/latest/download/oswaka-linux-amd64
 
 # Make executable
 chmod +x oswaka-linux-amd64
@@ -41,6 +44,7 @@ mv oswaka-linux-amd64 /usr/local/bin/oswaka
 ```
 
 #### Step 2: Create Configuration
+
 ```bash
 # Create directories
 sudo mkdir -p /etc/oswaka
@@ -55,6 +59,7 @@ sudo nano /etc/oswaka/config.yaml
 ```
 
 #### Step 3: Create Systemd Service
+
 ```bash
 sudo tee /etc/systemd/system/oswaka.service <<EOF
 [Unit]
@@ -85,6 +90,7 @@ EOF
 ```
 
 #### Step 4: Create Service User
+
 ```bash
 # Create user
 sudo useradd -r -s /bin/false -d /var/lib/oswaka oswaka
@@ -96,6 +102,7 @@ sudo chown -R oswaka:oswaka /etc/oswaka
 ```
 
 #### Step 5: Enable and Start Service
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable oswaka
@@ -113,12 +120,14 @@ sudo journalctl -u oswaka -f
 ### Method 2: Build from Source
 
 #### Step 1: Clone Repository
+
 ```bash
 git clone https://github.com/marcosfpina/O.W.A.S.A.K.A.git
 cd O.W.A.S.A.K.A
 ```
 
 #### Step 2: Build
+
 ```bash
 make build
 
@@ -127,6 +136,7 @@ make build-release
 ```
 
 #### Step 3: Install
+
 ```bash
 sudo make install
 ```
@@ -177,6 +187,7 @@ network:
 See `configs/examples/default.yaml` for full configuration options.
 
 **Key settings**:
+
 - Enable TLS for server
 - Configure NAS storage
 - Enable encryption
@@ -251,6 +262,7 @@ sudo ufw enable
 ## Security Hardening
 
 ### File Permissions
+
 ```bash
 # Restrict config file
 sudo chmod 600 /etc/oswaka/config.yaml
@@ -260,11 +272,13 @@ sudo chmod 400 /etc/oswaka/keys/*
 ```
 
 ### AppArmor Profile (Future)
+
 ```bash
 # TODO: Create AppArmor profile
 ```
 
 ### SELinux Policy (Future)
+
 ```bash
 # TODO: Create SELinux policy
 ```
@@ -274,6 +288,7 @@ sudo chmod 400 /etc/oswaka/keys/*
 ## Monitoring & Maintenance
 
 ### Log Rotation
+
 ```bash
 # Create logrotate config
 sudo tee /etc/logrotate.d/oswaka <<EOF
@@ -294,6 +309,7 @@ EOF
 ```
 
 ### Health Checks
+
 ```bash
 # Check service status
 systemctl status oswaka
@@ -309,6 +325,7 @@ curl http://localhost:8080/metrics
 ```
 
 ### Backup Procedures
+
 ```bash
 # Backup configuration
 sudo tar -czf oswaka-config-backup-$(date +%Y%m%d).tar.gz /etc/oswaka
@@ -322,6 +339,7 @@ sudo tar -czf oswaka-data-backup-$(date +%Y%m%d).tar.gz /var/lib/oswaka
 ## Troubleshooting
 
 ### Service Won't Start
+
 ```bash
 # Check logs
 sudo journalctl -u oswaka -n 100 --no-pager
@@ -334,6 +352,7 @@ ls -la /var/lib/oswaka
 ```
 
 ### High Memory Usage
+
 ```bash
 # Check memory limits in config
 grep max_memory_mb /etc/oswaka/config.yaml
@@ -343,6 +362,7 @@ sudo systemctl restart oswaka
 ```
 
 ### NAS Connection Issues
+
 ```bash
 # Check mount
 mount | grep oswaka_nas
@@ -359,6 +379,7 @@ grep -i nas /var/log/oswaka/oswaka.log
 ## Upgrade Procedure
 
 ### Binary Upgrade
+
 ```bash
 # Stop service
 sudo systemctl stop oswaka
@@ -380,6 +401,7 @@ sudo systemctl status oswaka
 ```
 
 ### Rollback
+
 ```bash
 # Stop service
 sudo systemctl stop oswaka
