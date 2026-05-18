@@ -103,6 +103,10 @@ demo-sprint3: ## Run the Sprint 3 provenance (signing + Merkle log) demo
 	@echo "$(CYAN)Running Sprint 3 provenance demo...$(NC)"
 	$(GO) test -tags=demo -v -count=1 ./internal/storage/transparency/demo/...
 
+demo-sprint4: ## Run the Sprint 4 durability (migrate + backup + restore + retention) demo
+	@echo "$(CYAN)Running Sprint 4 durability demo...$(NC)"
+	$(GO) test -tags=demo -v -count=1 ./internal/storage/backup/demo/...
+
 benchmark: ## Run benchmarks
 	@echo "$(CYAN)Running benchmarks...$(NC)"
 	$(GO) test -bench=. -benchmem ./...
