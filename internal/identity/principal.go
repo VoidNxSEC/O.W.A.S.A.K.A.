@@ -39,12 +39,17 @@ const (
 // Every authenticated request, every published event, and every audit
 // entry carries a reference to a Principal. IDs are stable across
 // credential rotations so historical events remain attributable.
+//
+// Roles are the input to authorization decisions (see internal/authz).
+// They live as a typed field because authz reads them on every request;
+// arbitrary identity metadata stays in Claims.
 type Principal struct {
 	ID          string          `json:"id"`
 	Type        PrincipalType   `json:"type"`
 	Subject     string          `json:"subject"`
 	DisplayName string          `json:"display_name,omitempty"`
 	Status      PrincipalStatus `json:"status"`
+	Roles       []string        `json:"roles,omitempty"`
 	Claims      map[string]any  `json:"claims,omitempty"`
 
 	CreatedAt  time.Time  `json:"created_at"`
@@ -65,4 +70,19 @@ func (p *Principal) Claim(name string) string {
 		return v
 	}
 	return ""
+}
+
+// HasRole reports whether the Principal carries the given role. Used by
+// callers that need a quick allow/deny short of running the full authz
+// engine (rare; prefer authz.PrincipalAllowed for real decisions).
+func (p *Principal) HasRole(name string) bool {
+	if p == nil {
+		return false
+	}
+	for _, r := range p.Roles {
+		if r == name {
+			return true
+		}
+	}
+	return false
 }

@@ -116,12 +116,23 @@ func (e *Engine) Explain(ctx context.Context, p *identity.Principal, resource Re
 	return e.Allowed(ctx, p, resource, action, attrs)
 }
 
-// principalRoles extracts the role names from a Principal's claims.
-// Supported shapes:
+// principalRoles extracts the role names from a Principal.
+//
+// Reads the typed Principal.Roles field first; falls back to the older
+// claims["roles"] shape for compat with credentials and external token
+// formats that store roles inside claims (OIDC ID tokens, JWT payloads
+// from outside our issuer). Supported claim shapes:
+//
 //   - claims["roles"] = []string{"admin"}
 //   - claims["roles"] = []any{"admin", "service"}  (YAML/JSON decode)
 //   - claims["roles"] = "admin"                    (single-role shortcut)
 func principalRoles(p *identity.Principal) []string {
+	if p == nil {
+		return nil
+	}
+	if len(p.Roles) > 0 {
+		return p.Roles
+	}
 	if p.Claims == nil {
 		return nil
 	}

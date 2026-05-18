@@ -54,6 +54,23 @@ type Config struct {
 	// LoginStateTTL bounds how long a /login → /callback round-trip
 	// may take. Defaults to 5 minutes if zero.
 	LoginStateTTL time.Duration
+
+	// GroupRoleMap binds IdP-issued group names to OWASAKA role names.
+	// Used by DefaultMapper when populating Principal.Roles from an
+	// authenticated OIDC session.
+	//
+	// Example with Zitadel:
+	//   GroupRoleMap: {
+	//     "siem-admins":    "admin",
+	//     "siem-analysts":  "analyst",
+	//     "siem-viewers":   "viewer",
+	//     "compliance":     "auditor",
+	//   }
+	//
+	// A user in multiple mapped groups receives the union of their
+	// mapped roles. Groups without a mapping are silently ignored
+	// (logged at debug, not surfaced as failures).
+	GroupRoleMap map[string]string
 }
 
 // Validate enforces the minimum field set required to build a Client.

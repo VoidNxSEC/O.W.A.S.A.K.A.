@@ -132,7 +132,7 @@ func flipFirst(s string) string {
 
 func TestDefaultMapper_AutoProvisionCreatesPrincipal(t *testing.T) {
 	store := identity.NewMemoryPrincipalStore()
-	m := NewDefaultMapper(store, true)
+	m := NewDefaultMapper(store, true, nil)
 
 	got, err := m.Map(context.Background(), IDClaims{
 		Subject:           "user-1",
@@ -170,7 +170,7 @@ func TestDefaultMapper_FindsExistingPrincipal(t *testing.T) {
 	}
 	_ = store.Save(context.Background(), preexisting)
 
-	m := NewDefaultMapper(store, false)
+	m := NewDefaultMapper(store, false, nil)
 	got, err := m.Map(context.Background(), IDClaims{
 		Subject: "user-1",
 		Issuer:  "https://idp.example",
@@ -189,7 +189,7 @@ func TestDefaultMapper_FindsExistingPrincipal(t *testing.T) {
 
 func TestDefaultMapper_AutoProvisionDisabled(t *testing.T) {
 	store := identity.NewMemoryPrincipalStore()
-	m := NewDefaultMapper(store, false)
+	m := NewDefaultMapper(store, false, nil)
 	_, err := m.Map(context.Background(), IDClaims{Subject: "ghost", Issuer: "https://idp.example"})
 	if !errors.Is(err, ErrPrincipalUnknown) {
 		t.Fatalf("expected ErrPrincipalUnknown, got %v", err)
@@ -202,7 +202,7 @@ func TestDefaultMapper_InactivePrincipalRejected(t *testing.T) {
 		ID:      "p", Subject: "oidc:https://idp.example:u",
 		Status: identity.StatusSuspended,
 	})
-	m := NewDefaultMapper(store, true)
+	m := NewDefaultMapper(store, true, nil)
 	_, err := m.Map(context.Background(), IDClaims{Subject: "u", Issuer: "https://idp.example"})
 	if !errors.Is(err, identity.ErrPrincipalInactive) {
 		t.Fatalf("expected ErrPrincipalInactive, got %v", err)
@@ -210,12 +210,66 @@ func TestDefaultMapper_InactivePrincipalRejected(t *testing.T) {
 }
 
 func TestDefaultMapper_RejectsEmptySubOrIss(t *testing.T) {
-	m := NewDefaultMapper(identity.NewMemoryPrincipalStore(), true)
+	m := NewDefaultMapper(identity.NewMemoryPrincipalStore(), true, nil)
 	if _, err := m.Map(context.Background(), IDClaims{Issuer: "x"}); err == nil {
 		t.Fatal("expected error for empty sub")
 	}
 	if _, err := m.Map(context.Background(), IDClaims{Subject: "x"}); err == nil {
 		t.Fatal("expected error for empty iss")
+	}
+}
+
+func TestDefaultMapper_GroupRoleMap_AppliesOnProvision(t *testing.T) {
+	store := identity.NewMemoryPrincipalStore()
+	m := NewDefaultMapper(store, true, map[string]string{
+		"siem-admins":   "admin",
+		"siem-analysts": "analyst",
+	})
+	got, err := m.Map(context.Background(), IDClaims{
+		Subject: "u-1",
+		Issuer:  "https://idp.example",
+		Groups:  []string{"siem-admins", "noise", "siem-analysts"},
+	})
+	if err != nil {
+		t.Fatalf("map: %v", err)
+	}
+	if len(got.Roles) != 2 || got.Roles[0] != "admin" || got.Roles[1] != "analyst" {
+		t.Fatalf("expected roles [admin, analyst], got %v", got.Roles)
+	}
+}
+
+func TestDefaultMapper_GroupRoleMap_RefreshesOnExistingPrincipal(t *testing.T) {
+	store := identity.NewMemoryPrincipalStore()
+	_ = store.Save(context.Background(), &identity.Principal{
+		ID:      "p", Subject: "oidc:https://idp.example:u",
+		Status: identity.StatusActive,
+		Roles:  []string{"admin"}, // stale
+	})
+	m := NewDefaultMapper(store, true, map[string]string{
+		"siem-analysts": "analyst",
+	})
+	got, err := m.Map(context.Background(), IDClaims{
+		Subject: "u",
+		Issuer:  "https://idp.example",
+		Groups:  []string{"siem-analysts"}, // IdP demoted user
+	})
+	if err != nil {
+		t.Fatalf("map: %v", err)
+	}
+	if len(got.Roles) != 1 || got.Roles[0] != "analyst" {
+		t.Fatalf("login should refresh roles to [analyst], got %v", got.Roles)
+	}
+}
+
+func TestDefaultMapper_GroupRoleMap_NilMapYieldsNoRoles(t *testing.T) {
+	store := identity.NewMemoryPrincipalStore()
+	m := NewDefaultMapper(store, true, nil)
+	got, _ := m.Map(context.Background(), IDClaims{
+		Subject: "u", Issuer: "https://idp.example",
+		Groups: []string{"any"},
+	})
+	if len(got.Roles) != 0 {
+		t.Fatalf("expected no roles with nil GroupRoleMap, got %v", got.Roles)
 	}
 }
 
@@ -448,7 +502,7 @@ func TestHandlers_LoginRedirectsToIdP(t *testing.T) {
 		t.Fatalf("new: %v", err)
 	}
 	iss, _ := realIssuer(t)
-	h := NewHandlers(c, NewDefaultMapper(identity.NewMemoryPrincipalStore(), true), iss)
+	h := NewHandlers(c, NewDefaultMapper(identity.NewMemoryPrincipalStore(), true, nil), iss)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/auth/oidc/login?return=/dash", nil)
@@ -489,7 +543,7 @@ func TestHandlers_CallbackHappyPath(t *testing.T) {
 		t.Fatalf("new: %v", err)
 	}
 	store := identity.NewMemoryPrincipalStore()
-	mapper := NewDefaultMapper(store, true)
+	mapper := NewDefaultMapper(store, true, nil)
 	pair := &owjwt.TokenPair{AccessToken: "ow-a", RefreshToken: "ow-r"}
 	h := NewHandlers(c, mapper, &stubIssuer{pair: pair})
 
@@ -550,7 +604,7 @@ func TestHandlers_CallbackRejectsStateMismatch(t *testing.T) {
 		Enabled: true, IssuerURL: fp.server.URL,
 		ClientID: "c", ClientSecret: "s", RedirectURL: "https://app/cb",
 	}, []byte("state-key"))
-	h := NewHandlers(c, NewDefaultMapper(identity.NewMemoryPrincipalStore(), true), &stubIssuer{pair: &owjwt.TokenPair{}})
+	h := NewHandlers(c, NewDefaultMapper(identity.NewMemoryPrincipalStore(), true, nil), &stubIssuer{pair: &owjwt.TokenPair{}})
 
 	req := httptest.NewRequest("GET", "/auth/oidc/callback?code=x&state=forged", nil)
 	req.AddCookie(&http.Cookie{Name: "owasaka_oidc_state", Value: "different"})
@@ -568,7 +622,7 @@ func TestHandlers_CallbackForwardsIdPError(t *testing.T) {
 		Enabled: true, IssuerURL: fp.server.URL,
 		ClientID: "c", ClientSecret: "s", RedirectURL: "https://app/cb",
 	}, []byte("state-key"))
-	h := NewHandlers(c, NewDefaultMapper(identity.NewMemoryPrincipalStore(), true), &stubIssuer{pair: &owjwt.TokenPair{}})
+	h := NewHandlers(c, NewDefaultMapper(identity.NewMemoryPrincipalStore(), true, nil), &stubIssuer{pair: &owjwt.TokenPair{}})
 
 	req := httptest.NewRequest("GET", "/auth/oidc/callback?error=access_denied", nil)
 	rr := httptest.NewRecorder()
@@ -591,7 +645,7 @@ func TestHandlers_CallbackUnknownPrincipal(t *testing.T) {
 	}, []byte("state-key"))
 
 	store := identity.NewMemoryPrincipalStore()
-	mapper := NewDefaultMapper(store, false) // no auto-provision
+	mapper := NewDefaultMapper(store, false, nil) // no auto-provision
 	h := NewHandlers(c, mapper, &stubIssuer{pair: &owjwt.TokenPair{}})
 
 	loginRR := httptest.NewRecorder()

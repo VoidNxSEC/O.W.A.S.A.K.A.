@@ -24,19 +24,30 @@ type ClaimMapper interface {
 // It indexes principals by a "oidc:<issuer>:<sub>" Subject so multiple
 // issuers can coexist without collision. When AutoProvision is on, the
 // first login for an unknown OIDC subject creates a Human principal
-// with claims pre-populated from the ID token.
+// with claims pre-populated from the ID token. GroupRoleMap binds
+// IdP-issued groups to OWASAKA roles on every login (so role changes
+// in the IdP propagate without manual sync).
 type DefaultMapper struct {
 	Store         identity.PrincipalStore
 	AutoProvision bool
-	Now           func() time.Time
+	// GroupRoleMap binds IdP group names to OWASAKA role names.
+	// Empty map means OIDC logins receive no roles by default —
+	// operators must pre-assign roles via the principal store, or
+	// provision the mapping here. See oidc.Config.GroupRoleMap.
+	GroupRoleMap map[string]string
+	Now          func() time.Time
 }
 
 // NewDefaultMapper builds a DefaultMapper. Pass autoProvision=false to
 // require operators to be pre-provisioned (high-assurance deployments).
-func NewDefaultMapper(store identity.PrincipalStore, autoProvision bool) *DefaultMapper {
+// groupRoleMap is the IdP group → OWASAKA role binding; nil/empty maps
+// produce role-less Principals that fail every authorization check
+// (compliant fail-closed behavior, callers should configure groups).
+func NewDefaultMapper(store identity.PrincipalStore, autoProvision bool, groupRoleMap map[string]string) *DefaultMapper {
 	return &DefaultMapper{
 		Store:         store,
 		AutoProvision: autoProvision,
+		GroupRoleMap:  groupRoleMap,
 		Now:           time.Now,
 	}
 }
@@ -57,9 +68,10 @@ func (m *DefaultMapper) Map(ctx context.Context, claims IDClaims) (*identity.Pri
 		if !existing.IsActive() {
 			return nil, identity.ErrPrincipalInactive
 		}
-		// Refresh claims on every login so role/email changes upstream
-		// propagate without a separate sync job.
+		// Refresh claims and roles on every login so IdP-side group /
+		// email changes propagate without a separate sync job.
 		existing.Claims = enrichClaims(existing.Claims, claims)
+		identity.AssignRoles(existing, m.rolesForGroups(claims.Groups)...)
 		_ = m.Store.Save(ctx, existing)
 		return existing, nil
 	}
@@ -85,10 +97,27 @@ func (m *DefaultMapper) Map(ctx context.Context, claims IDClaims) (*identity.Pri
 		Claims:      enrichClaims(nil, claims),
 		CreatedAt:   now,
 	}
+	identity.AssignRoles(p, m.rolesForGroups(claims.Groups)...)
 	if err := m.Store.Save(ctx, p); err != nil {
 		return nil, err
 	}
 	return p, nil
+}
+
+// rolesForGroups translates IdP-issued group names into OWASAKA role
+// names via the configured GroupRoleMap. Unmapped groups are dropped
+// silently — they may belong to other applications sharing the IdP.
+func (m *DefaultMapper) rolesForGroups(groups []string) []string {
+	if len(groups) == 0 || len(m.GroupRoleMap) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if role, ok := m.GroupRoleMap[g]; ok && role != "" {
+			out = append(out, role)
+		}
+	}
+	return out
 }
 
 // PrincipalSubject is the canonical store-indexed Subject for an OIDC
