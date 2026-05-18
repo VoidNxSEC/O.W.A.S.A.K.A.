@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -43,6 +44,7 @@ type Pipeline struct {
 	topology TopologyMapper
 	stream   StreamEnricher
 	observer EventObserver
+	signer   *Signer
 }
 
 func spectreNetworkSubject(eventType models.EventType) string {
@@ -68,6 +70,15 @@ func NewPipeline(repo *db.Repository, hub *api.WSHub, pub *Publisher, logger *lo
 		pub:    pub,
 		logger: logger,
 	}
+}
+
+// SetSigner installs the provenance signer (ADR-0062). When set, every
+// event passing through PushNetworkEvent is signed with the current
+// PurposeEventSigning key before BoltDB persistence and NATS publish.
+// A nil signer leaves events unsigned — fine for tests and dev mode,
+// rejected by production verifiers.
+func (p *Pipeline) SetSigner(s *Signer) {
+	p.signer = s
 }
 
 // SetEngine dynamically binds a Correlation module onto the live pipeline layer
@@ -103,6 +114,18 @@ func (p *Pipeline) PushNetworkEvent(e models.NetworkEvent) {
 	// 1b. Normalize and enrich with sliding-window context
 	if p.stream != nil {
 		e = p.stream.Enrich(e)
+	}
+
+	// 1c. Sign the event (ADR-0062). Signature is computed over the
+	// canonical bytes BEFORE persistence or publish, so tampering
+	// anywhere downstream invalidates the signature. Signing failure
+	// is logged but non-fatal; production verifiers will reject the
+	// unsigned event, surfacing the breakage at the consumer rather
+	// than dropping the event silently.
+	if p.signer != nil {
+		if err := p.signer.Sign(context.Background(), &e); err != nil {
+			p.logger.Errorw("Failed to sign event", "error", err, "event_id", e.ID)
+		}
 	}
 
 	// 2. Persist cleanly to disk locally via BoltDB

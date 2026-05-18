@@ -11,14 +11,18 @@ import (
 )
 
 // JWK is a single JSON Web Key in the JWKS response. Only the fields
-// Spectre/Cerebro need to verify Ed25519 OKP keys are emitted.
+// Spectre/Cerebro need to verify Ed25519 OKP keys are emitted. A custom
+// `owasaka_purpose` field disambiguates the OWASAKA-internal purpose
+// (jwt-signing vs event-signing vs transparency-sth) for verifiers that
+// must dispatch on purpose; standard OIDC/JWKS consumers ignore it.
 type JWK struct {
-	Kty string `json:"kty"`
-	Crv string `json:"crv"`
-	X   string `json:"x"`
-	Use string `json:"use"`
-	Alg string `json:"alg"`
-	Kid string `json:"kid"`
+	Kty     string `json:"kty"`
+	Crv     string `json:"crv"`
+	X       string `json:"x"`
+	Use     string `json:"use"`
+	Alg     string `json:"alg"`
+	Kid     string `json:"kid"`
+	Purpose string `json:"owasaka_purpose,omitempty"`
 }
 
 // JWKS is the public set of keys served at /.well-known/jwks.json.
@@ -26,26 +30,42 @@ type JWKS struct {
 	Keys []JWK `json:"keys"`
 }
 
+// publishedPurposes is the set of PKI purposes that get exported on
+// the JWKS endpoint. PurposeCA and PurposeServiceCert are intentionally
+// excluded: the root CA's public certificate is distributed separately
+// (boot banner + ops record), and service-cert public keys belong in
+// the cert itself, not in a JWKS.
+var publishedPurposes = []pki.Purpose{
+	pki.PurposeJWTSigning,
+	pki.PurposeEventSigning,
+}
+
 // PublishKeys returns the JWKS of all signing keys currently considered
-// verifyable (active + rotating). Retired and expired keys are excluded.
+// verifyable (active + rotating) across every published purpose. Retired
+// and expired keys are excluded. Per ADR-0062 §"JWKS extension" the same
+// endpoint serves both JWT and event signing keys; downstream services
+// disambiguate by the `owasaka_purpose` field.
 func PublishKeys(ctx context.Context, authority *pki.Authority, now time.Time) (JWKS, error) {
-	keys, err := authority.KeysForPurpose(ctx, pki.PurposeJWTSigning)
-	if err != nil {
-		return JWKS{}, err
-	}
-	out := JWKS{Keys: make([]JWK, 0, len(keys))}
-	for _, kp := range keys {
-		if !kp.IsVerifyable(now) {
-			continue
+	out := JWKS{Keys: make([]JWK, 0, 4)}
+	for _, purpose := range publishedPurposes {
+		keys, err := authority.KeysForPurpose(ctx, purpose)
+		if err != nil {
+			return JWKS{}, err
 		}
-		out.Keys = append(out.Keys, JWK{
-			Kty: "OKP",
-			Crv: "Ed25519",
-			X:   base64.RawURLEncoding.EncodeToString(kp.Public),
-			Use: "sig",
-			Alg: "EdDSA",
-			Kid: kp.ID,
-		})
+		for _, kp := range keys {
+			if !kp.IsVerifyable(now) {
+				continue
+			}
+			out.Keys = append(out.Keys, JWK{
+				Kty:     "OKP",
+				Crv:     "Ed25519",
+				X:       base64.RawURLEncoding.EncodeToString(kp.Public),
+				Use:     "sig",
+				Alg:     "EdDSA",
+				Kid:     kp.ID,
+				Purpose: string(purpose),
+			})
+		}
 	}
 	return out, nil
 }
