@@ -26,10 +26,16 @@ const (
 	// for mTLS to ecosystem services (Spectre, Cerebro, agents).
 	PurposeServiceCert Purpose = "service-cert"
 
-	// PurposeEventSigning: keypair used by ADR-EventSigning (Sprint 3)
-	// to sign published NetworkEvents. Allocated here so the same
-	// rotation/distribution primitives apply.
+	// PurposeEventSigning: keypair used by ADR-0062 (Sprint 3) to sign
+	// published NetworkEvents. Same rotation primitives apply.
 	PurposeEventSigning Purpose = "event-signing"
+
+	// PurposeTransparencyLogSTH: keypair used by ADR-0063 (Sprint 3) to
+	// sign the Signed Tree Head of the transparency log. Distinct from
+	// event signing so compromise of one does not invalidate the other.
+	// Rotates on a slower cadence (weekly) since STH issuance volume is
+	// orders of magnitude lower than event signing.
+	PurposeTransparencyLogSTH Purpose = "transparency-sth"
 )
 
 // KeyStatus reflects whether a KeyPair is currently usable.
