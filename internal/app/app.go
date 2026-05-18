@@ -12,6 +12,8 @@ import (
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/analytics/correlation"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/analytics/ml"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/analytics/stream"
+	"filippo.io/age"
+
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/api"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/authz"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/browser/automation"
@@ -31,8 +33,11 @@ import (
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/network/topology"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/db"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/integrity"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/migrations"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/nas"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/pki"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/retention"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/transparency"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/pkg/config"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/pkg/logging"
 )
@@ -111,6 +116,17 @@ func (a *App) Run() error {
 
 	repository := db.NewRepository(database)
 
+	// Boot-time migration gate. With AutoMigrate=false (default) the
+	// gate REFUSES startup if migrations are pending — operator must
+	// run `oswaka migrate up` first so schema changes are an explicit
+	// decision, not a silent side effect of a binary upgrade.
+	if err := migrations.CheckBoot(database.DB(), a.cfg.Storage.Migrations.AutoMigrate); err != nil {
+		a.logger.Errorw("Migration gate refused startup", "error", err,
+			"auto_migrate", a.cfg.Storage.Migrations.AutoMigrate,
+			"hint", "run `oswaka migrate up` or set storage.migrations.auto_migrate=true")
+		return err
+	}
+
 	// Register DB health probe (required — readiness flips to 503 if
 	// the file lock is dropped or the file becomes unreadable).
 	healthRegistry.Register(health.NewStaticProbe("boltdb", true, func() health.Result {
@@ -119,6 +135,37 @@ func (a *App) Run() error {
 		}
 		return health.Result{Status: health.StatusHealthy}
 	}))
+
+	// Transparency Merkle log (RFC 6962-style). Opening creates the
+	// buckets if absent; non-fatal — without the tree, critical event
+	// signing still works but no STH journal is maintained.
+	tree, err := transparency.Open(database.DB())
+	if err != nil {
+		a.logger.Warnw("Transparency log open failed; events still sign but no STH", "error", err)
+	}
+
+	// Retention sweep (per-bucket TTL + BoltDB compaction). Disabled
+	// by default; operator opts in via storage.retention.enabled=true.
+	if a.cfg.Storage.Retention.Enabled {
+		rcfg := retention.Config{
+			EventsDefaultTTL:            time.Duration(a.cfg.Storage.Retention.EventsDefaultTTLDays) * 24 * time.Hour,
+			AlertsTTL:                   time.Duration(a.cfg.Storage.Retention.AlertsTTLDays) * 24 * time.Hour,
+			AssetsStaleTTL:              time.Duration(a.cfg.Storage.Retention.AssetsStaleTTLDays) * 24 * time.Hour,
+			SweepInterval:               time.Duration(a.cfg.Storage.Retention.SweepIntervalHours) * time.Hour,
+			CompactionFreelistThreshold: a.cfg.Storage.Retention.CompactionFreelistThreshold,
+		}
+		retentionEngine, err := retention.NewEngine(rcfg, database.DB(), retentionLoggerAdapter{a.logger})
+		if err != nil {
+			a.logger.Errorw("Retention engine init failed", "error", err)
+		} else {
+			stop := retentionEngine.Start(ctx)
+			defer stop()
+			a.logger.Infow("Retention sweep enabled",
+				"interval", rcfg.SweepInterval,
+				"events_ttl", rcfg.EventsDefaultTTL,
+				"alerts_ttl", rcfg.AlertsTTL)
+		}
+	}
 
 	// ── Auth Bootstrap ───────────────────────────────────────────────
 	// PKI Authority (in-memory keystore for now; BoltDB-backed in Sprint 5)
@@ -213,6 +260,30 @@ func (a *App) Run() error {
 	// Form Unified Pipeline
 	pipeline := events.NewPipeline(repository, apiServer.Hub, pub, a.logger)
 
+	// Ensure an event-signing key exists; sign every event leaving
+	// the pipeline (ADR-0063). Failing to mint the key is non-fatal
+	// — the pipeline signer falls back to "unsigned" mode and logs.
+	if _, err := authority.GenerateKeyPair(ctx, pki.PurposeEventSigning, 7*24*time.Hour); err != nil {
+		a.logger.Warnw("Event signing key generation failed; events will be unsigned",
+			"error", err)
+	} else {
+		pipeline.SetSigner(events.NewSigner(authority))
+		a.logger.Infow("Event signing enabled (Ed25519)")
+	}
+
+	// Wire transparency log so critical events accumulate inclusion
+	// proofs (ADR-0063 §"Transparency log"). Tree may be nil if the
+	// earlier Open failed; SetTransparencyLog tolerates that.
+	if tree != nil {
+		// Ensure an STH-signing key exists so the boot banner +
+		// admin endpoints can produce verifiable STHs.
+		if _, err := authority.GenerateKeyPair(ctx, pki.PurposeTransparencyLogSTH, 7*24*time.Hour); err != nil {
+			a.logger.Warnw("STH signing key generation failed", "error", err)
+		}
+		pipeline.SetTransparencyLog(transparencyLogAdapter{tree})
+		a.logger.Infow("Transparency log wired", "size", tree.Size())
+	}
+
 	// Hook Engine into Pipeline
 	pipeline.SetEngine(engine)
 	engine.SetAlertCallback(pipeline.PushNetworkEvent)
@@ -242,6 +313,25 @@ func (a *App) Run() error {
 	apiServer.RegisterHandler("/healthz", api.Instrument("/healthz", health.LivenessHandler(healthRegistry).ServeHTTP))
 	apiServer.RegisterHandler("/readyz", api.Instrument("/readyz", health.ReadinessHandler(healthRegistry).ServeHTTP))
 	apiServer.RegisterHandler("/startupz", api.Instrument("/startupz", health.StartupHandler(healthRegistry).ServeHTTP))
+
+	// Admin: POST /api/admin/backup — in-process encrypted hot backup.
+	// Wired only when recipients are configured; otherwise the
+	// endpoint is omitted so the surface area stays minimal.
+	if recipients := parseAgeRecipients(a.logger, a.cfg.Storage.Backup.Recipients); len(recipients) > 0 {
+		sinkDir := a.cfg.Storage.Backup.OutputDir
+		adminBackup := &api.AdminBackupHandler{
+			DB:         database.DB(),
+			Tree:       tree,
+			Recipients: recipients,
+			SinkDir:    sinkDir,
+			KeepLast:   a.cfg.Storage.Backup.KeepLast,
+			Logger:     a.logger,
+		}
+		apiServer.RegisterProtectedHandler("/api/admin/backup",
+			api.Instrument("/api/admin/backup", adminBackup.ServeHTTP))
+		a.logger.Infow("Admin backup endpoint registered",
+			"path", "/api/admin/backup", "sink_dir", sinkDir)
+	}
 
 	// Register auth endpoints (unprotected)
 	apiServer.RegisterHandler("/auth/login", api.Instrument("/auth/login", api.LoginHandler(api.LoginHandlerDeps{
@@ -377,6 +467,48 @@ func (a *App) Run() error {
 	}
 
 	return nil
+}
+
+// transparencyLogAdapter bridges *transparency.Tree to the
+// events.TransparencyLog interface. The tree exposes AppendBytes
+// with the same signature; the adapter just renames it to satisfy
+// the interface contract.
+type transparencyLogAdapter struct{ t *transparency.Tree }
+
+func (a transparencyLogAdapter) Append(ctx context.Context, kind, payload []byte, timestamp time.Time) error {
+	return a.t.AppendBytes(ctx, kind, payload, timestamp)
+}
+
+// retentionLoggerAdapter satisfies retention.Logger (which is
+// stdlib-agnostic) using the project's zap-backed logger.
+type retentionLoggerAdapter struct{ l *logging.Logger }
+
+func (a retentionLoggerAdapter) Infow(msg string, kv ...any) { a.l.Infow(msg, kv...) }
+func (a retentionLoggerAdapter) Warnw(msg string, kv ...any) { a.l.Warnw(msg, kv...) }
+
+// parseAgeRecipients best-effort parses the YAML-supplied age public
+// keys into recipient values. Invalid entries are logged and skipped
+// — the operator can fix the config and SIGHUP/restart, vs. losing
+// the entire backup endpoint to a typo.
+func parseAgeRecipients(logger *logging.Logger, keys []string) []age.Recipient {
+	out := make([]age.Recipient, 0, len(keys))
+	for _, k := range keys {
+		r, err := age.ParseX25519Recipient(k)
+		if err != nil {
+			logger.Warnw("backup recipient parse failed, skipping",
+				"key_prefix", safePrefix(k), "error", err)
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+func safePrefix(s string) string {
+	if len(s) > 16 {
+		return s[:16] + "…"
+	}
+	return s
 }
 
 // seedAdmin creates the initial admin principal and credential so the

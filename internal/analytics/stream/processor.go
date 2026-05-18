@@ -12,6 +12,8 @@ import (
 // ProcessorStats is the payload returned by /api/stats
 type ProcessorStats struct {
 	BufferedEvents int           `json:"buffered_events"`
+	DroppedEvents  uint64        `json:"dropped_events"`
+	Policy         string        `json:"backpressure_policy"`
 	TopIPs         []WindowStats `json:"top_ips_5m"`
 }
 
@@ -31,10 +33,14 @@ func NewProcessor(cfg *config.StreamConfig, logger *logging.Logger) *Processor {
 	if bufSize <= 0 {
 		bufSize = 10000
 	}
+	policy := BackpressurePolicy(cfg.BackpressurePolicy)
+	if policy != PolicyDropNewest {
+		policy = PolicyDropOldest
+	}
 	return &Processor{
 		cfg:    cfg,
 		logger: logger,
-		buf:    newCircularBuffer(bufSize),
+		buf:    newCircularBuffer(bufSize, policy),
 		win:    newWindower(),
 	}
 }
@@ -50,8 +56,8 @@ func (p *Processor) Start(ctx context.Context) {
 func (p *Processor) Enrich(e models.NetworkEvent) models.NetworkEvent {
 	e = Normalize(e)
 
-	// Record into buffer and windowed counters
-	p.buf.push(e)
+	// Record into buffer and windowed counters; drops are tracked via buf.Dropped()
+	_ = p.buf.push(e)
 	if e.Source != "" {
 		p.win.record(e.Source, e.Type)
 	}
@@ -75,8 +81,32 @@ func (p *Processor) Enrich(e models.NetworkEvent) models.NetworkEvent {
 func (p *Processor) Stats() ProcessorStats {
 	return ProcessorStats{
 		BufferedEvents: p.buf.len(),
+		DroppedEvents:  p.buf.Dropped(),
+		Policy:         string(p.buf.policy),
 		TopIPs:         p.win.topIPs(10),
 	}
+}
+
+// TryEnrich is a non-silent variant that surfaces ErrBufferFull when the
+// configured backpressure policy refuses the event. The returned event is
+// still enriched (windowing always runs) so callers can choose to forward it.
+func (p *Processor) TryEnrich(e models.NetworkEvent) (models.NetworkEvent, error) {
+	e = Normalize(e)
+	err := p.buf.push(e)
+	if e.Source != "" {
+		p.win.record(e.Source, e.Type)
+	}
+	if e.Metadata == nil {
+		e.Metadata = make(map[string]any)
+	}
+	if e.Source != "" {
+		stats := p.win.stats(e.Source)
+		e.Metadata["stream.count_1m"] = stats.Count1m
+		e.Metadata["stream.count_5m"] = stats.Count5m
+		e.Metadata["stream.count_15m"] = stats.Count15m
+		e.Metadata["stream.rate_1m"] = stats.Rate1m
+	}
+	return e, err
 }
 
 // WindowStatsForIP exposes per-IP window data for external consumers (e.g. ML detector)

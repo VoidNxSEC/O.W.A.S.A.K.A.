@@ -183,6 +183,40 @@ type StorageConfig struct {
 	Encryption EncryptionConfig   `yaml:"encryption"`
 	Integrity  IntegrityConfig    `yaml:"integrity"`
 	Local      LocalStorageConfig `yaml:"local"`
+	Retention  RetentionConfig    `yaml:"retention"`
+	Migrations MigrationsConfig   `yaml:"migrations"`
+	Backup     BackupConfig       `yaml:"backup"`
+}
+
+// BackupConfig configures the encrypted hot-backup engine.
+// Recipients are age public keys (one per operator + one per offline
+// vault). IdentitiesFile points at the age key file used for
+// restore — usually loaded via systemd LoadCredential on production.
+type BackupConfig struct {
+	Recipients      []string `yaml:"recipients"`
+	IdentitiesFile  string   `yaml:"identities_file"`
+	OutputDir       string   `yaml:"output_dir"`
+	KeepLast        int      `yaml:"keep_last"`
+}
+
+// RetentionConfig configures the daily retention sweep. Zero TTL on
+// any field means "keep forever". See internal/storage/retention.
+type RetentionConfig struct {
+	Enabled                     bool `yaml:"enabled"`
+	EventsDefaultTTLDays        int  `yaml:"events_default_ttl_days"`
+	AlertsTTLDays               int  `yaml:"alerts_ttl_days"`
+	AssetsStaleTTLDays          int  `yaml:"assets_stale_ttl_days"`
+	SweepIntervalHours          int  `yaml:"sweep_interval_hours"`
+	CompactionFreelistThreshold int  `yaml:"compaction_freelist_threshold"`
+}
+
+// MigrationsConfig controls boot-time schema migration behavior. By
+// default the gate REFUSES to start with pending migrations so an
+// operator must consciously apply them via `oswaka migrate up`. Set
+// AutoMigrate=true to apply pending migrations automatically on
+// startup (acceptable for dev, dangerous in production).
+type MigrationsConfig struct {
+	AutoMigrate bool `yaml:"auto_migrate"`
 }
 
 type NASConfig struct {
@@ -228,10 +262,11 @@ type AnalyticsConfig struct {
 }
 
 type StreamConfig struct {
-	Enabled              bool `yaml:"enabled"`
-	BufferSize           int  `yaml:"buffer_size"`
-	FlushIntervalSeconds int  `yaml:"flush_interval_seconds"`
-	Workers              int  `yaml:"workers"`
+	Enabled              bool   `yaml:"enabled"`
+	BufferSize           int    `yaml:"buffer_size"`
+	FlushIntervalSeconds int    `yaml:"flush_interval_seconds"`
+	Workers              int    `yaml:"workers"`
+	BackpressurePolicy   string `yaml:"backpressure_policy"`
 }
 
 type CorrelationConfig struct {

@@ -1,0 +1,64 @@
+[Unit]
+Description=O.W.A.S.A.K.A. SIEM — Air-gapped Security Monitoring Platform
+Documentation=https://github.com/marcosfpina/O.W.A.S.A.K.A
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Type=simple — oswaka does not currently call sd_notify(3). If/when the
+# binary gains a notify-ready signal at the end of app.Run() startup, flip
+# this to Type=notify and add NotifyAccess=main for tighter readiness
+# coupling with systemd.
+Type=simple
+
+User=oswaka
+Group=oswaka
+
+ExecStart=/usr/bin/oswaka --config /etc/oswaka/config.yaml
+
+Restart=always
+RestartSec=5s
+
+# State and log dirs are created (mode 0755) and chowned to User:Group by
+# systemd. Paths resolve to /var/lib/oswaka and /var/log/oswaka.
+StateDirectory=oswaka
+LogsDirectory=oswaka
+
+# Capabilities — needed for raw socket / packet capture and ARP/ICMP probes.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+
+# Filesystem and process hardening. ProtectSystem=strict makes the entire
+# filesystem read-only except the paths explicitly granted via
+# ReadWritePaths / StateDirectory / LogsDirectory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+ReadWritePaths=/var/lib/oswaka /var/log/oswaka
+
+# Encrypted-secrets credential. systemd copies /etc/oswaka/age.key into
+# %d/age-key (mode 0400) accessible only to this unit; the source path
+# is read by systemd as root before privileges drop, so the oswaka user
+# never needs read access to /etc/oswaka/age.key.
+#
+# The binary picks the key up via SOPS_AGE_KEY_FILE (see internal/identity
+# and docs/secrets/BOOTSTRAP.md).
+LoadCredential=age-key:/etc/oswaka/age.key
+Environment=SOPS_AGE_KEY_FILE=%d/age-key
+
+Environment=OSWAKA_ENV=production
+
+[Install]
+WantedBy=multi-user.target

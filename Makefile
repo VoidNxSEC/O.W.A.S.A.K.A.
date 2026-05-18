@@ -107,6 +107,10 @@ demo-sprint4: ## Run the Sprint 4 durability (migrate + backup + restore + reten
 	@echo "$(CYAN)Running Sprint 4 durability demo...$(NC)"
 	$(GO) test -tags=demo -v -count=1 ./internal/storage/backup/demo/...
 
+demo-sprint5: ## Run the Sprint 5 reliability (health + breakers + degradation) demo
+	@echo "$(CYAN)Running Sprint 5 reliability demo...$(NC)"
+	$(GO) test -tags=demo -v -count=1 ./internal/reliability/demo/...
+
 benchmark: ## Run benchmarks
 	@echo "$(CYAN)Running benchmarks...$(NC)"
 	$(GO) test -bench=. -benchmem ./...

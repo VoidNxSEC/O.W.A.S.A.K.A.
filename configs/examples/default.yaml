@@ -187,6 +187,37 @@ storage:
     max_size_gb: 100
     cleanup_policy: "oldest_first"
 
+  # Per-bucket retention sweep + BoltDB compaction. Disabled by
+  # default; turn on with `enabled: true` once you've validated the
+  # TTLs against your compliance posture (LGPD / ISO 27001 / NIST).
+  retention:
+    enabled: false
+    events_default_ttl_days: 90
+    alerts_ttl_days: 365
+    assets_stale_ttl_days: 30
+    sweep_interval_hours: 24
+    compaction_freelist_threshold: 1024
+
+  # Boot-time schema-migration gate. Default refuses to start when
+  # migrations are pending — operator must run `oswaka migrate up`
+  # explicitly. Set auto_migrate=true to apply on boot (dev only).
+  migrations:
+    auto_migrate: false
+
+  # Encrypted hot-backup engine. Recipients are age public keys
+  # (`age-keygen` output). identities_file is the matching private
+  # key file used by `oswaka restore` and the admin endpoint.
+  # See docs/auth/BACKUP.md for the full operator workflow.
+  backup:
+    recipients: []
+    # Example:
+    # recipients:
+    #   - "age1qz7q…operator-1"
+    #   - "age1qz7q…offline-vault"
+    identities_file: ""
+    output_dir: "./data/backups"
+    keep_last: 7
+
 # Analytics and correlation
 analytics:
   # Stream processing
@@ -195,6 +226,8 @@ analytics:
     buffer_size: 100000
     flush_interval_seconds: 5
     workers: 4
+    # backpressure when buffer is full: "drop_oldest" (default) or "drop_newest"
+    backpressure_policy: "drop_oldest"
 
   # Correlation engine
   correlation:

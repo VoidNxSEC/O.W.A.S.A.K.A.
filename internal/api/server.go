@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -12,6 +13,13 @@ import (
 	"github.com/marcosfpina/O.W.A.S.A.K.A/pkg/logging"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+// hstsMaxAgeSeconds is the HSTS max-age advertised to clients (1 year).
+// Browsers will refuse plaintext connections to this host for this
+// duration after the first HTTPS response. We do not advertise
+// includeSubDomains or preload — that's an explicit operator choice
+// not made in code.
+const hstsMaxAgeSeconds = 31536000
 
 // Server encapsulates the HTTP and WebSocket API server
 type Server struct {
@@ -99,7 +107,25 @@ func (s *Server) SetAuthMiddleware(mw interface {
 	s.authMiddleware = mw
 }
 
-// Start opens the main port listeners
+// hstsMiddleware injects HSTS on every response so the browser
+// remembers to use HTTPS for the next hstsMaxAgeSeconds. Applied
+// unconditionally — even on plaintext responses (which only happen
+// when TLS is disabled in config). When the header arrives over
+// plaintext browsers ignore it per RFC 6797 §7.2, so this is safe.
+func hstsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Strict-Transport-Security",
+			fmt.Sprintf("max-age=%d", hstsMaxAgeSeconds))
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Start opens the main port listeners. If cfg.TLS.Enabled is true,
+// the listener uses TLS 1.3 minimum with a conservative cipher list
+// and serves HTTPS only — there is no automatic plaintext-to-TLS
+// redirect because owasaka clients (frontend, CLI) are configured
+// directly with the https:// URL and we'd rather fail loudly than
+// silently downgrade.
 func (s *Server) Start(ctx context.Context) error {
 	go s.Hub.Run()
 
@@ -110,12 +136,30 @@ func (s *Server) Start(ctx context.Context) error {
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
 	s.httpServer = &http.Server{
-		Addr:    addr,
-		Handler: s.mux,
+		Addr:              addr,
+		Handler:           hstsMiddleware(s.mux),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	s.logger.Infow("Starting Command Center API", "addr", addr)
+	if s.cfg.TLS.Enabled {
+		if s.cfg.TLS.CertFile == "" || s.cfg.TLS.KeyFile == "" {
+			return fmt.Errorf("api: TLS enabled but cert_file or key_file missing")
+		}
+		s.httpServer.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS13,
+		}
+		s.logger.Infow("Starting Command Center API (TLS 1.3)",
+			"addr", addr, "cert", s.cfg.TLS.CertFile)
+		go func() {
+			if err := s.httpServer.ListenAndServeTLS(s.cfg.TLS.CertFile, s.cfg.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
+				s.logger.Errorw("Command Center API (TLS) failed", "error", err)
+			}
+		}()
+		return nil
+	}
 
+	s.logger.Warnw("Starting Command Center API in PLAINTEXT — TLS disabled in config",
+		"addr", addr)
 	go func() {
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			s.logger.Errorw("Command Center API failed", "error", err)

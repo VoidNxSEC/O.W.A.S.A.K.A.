@@ -9,7 +9,10 @@ record for its sprint.
 
 ```bash
 make demo-sprint1        # Sprint 1: identity & authentication
-# more demos land per sprint
+make demo-sprint2        # Sprint 2: RBAC
+make demo-sprint3        # Sprint 3: provenance + transparency log
+make demo-sprint4        # Sprint 4: backup + restore + retention
+make demo-sprint5        # Sprint 5: health probes + breakers + degradation
 ```
 
 The build tag (`-tags=demo`) keeps these out of the regular `go test`
@@ -35,6 +38,7 @@ them next to the transcript so reviewers can pick either format.
 | `sprint-02-transcript.txt`        | 2      | 4 baseline roles matrix → in-process mTLS-cn → hot-reload → analyst recipe → malformed-keeps-prior |
 | `sprint-03-transcript.txt`        | 3      | sign event → JWKS verify → Merkle append → STH → inclusion proof → tamper-detect → consistency proof |
 | `sprint-04-transcript.txt`        | 4      | migrate → seed → backup (age + sidecar) → tamper → restore with journal STH → retention sweep |
+| `sprint-05-transcript.txt`        | 5      | health probes → graceful degradation → backoff+retry → circuit breaker trip/recover → ctx-cancel exclusion |
 
 ## Anatomy of a demo test
 
