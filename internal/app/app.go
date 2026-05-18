@@ -21,6 +21,7 @@ import (
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/discovery/reconciliation"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/discovery/virtual"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/events"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/health"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/identity"
 	owjwt "github.com/marcosfpina/O.W.A.S.A.K.A/internal/identity/jwt"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/identity/middleware"
@@ -69,9 +70,15 @@ func (a *App) Run() error {
 		"server_port", a.cfg.Server.Port,
 	)
 
+	// Health registry — populated as subsystems come online; flipped
+	// to "ready" by MarkStartupComplete once every required subsystem
+	// has finished initializing.
+	healthRegistry := health.NewRegistry()
+
 	// Connect to NATS event bus (optional — nil publisher disables event publishing)
 	var pub *events.Publisher
-	if a.cfg.NatsURL != "" {
+	natsConfigured := a.cfg.NatsURL != ""
+	if natsConfigured {
 		var err error
 		pub, err = events.Connect(a.cfg.NatsURL)
 		if err != nil {
@@ -82,6 +89,18 @@ func (a *App) Run() error {
 		}
 	}
 
+	// NATS health probe (optional — degraded when configured-but-down,
+	// healthy when explicitly disabled via empty NatsURL).
+	healthRegistry.Register(health.NewStaticProbe("nats", false, func() health.Result {
+		if !natsConfigured {
+			return health.Result{Status: health.StatusHealthy, Message: "disabled (no nats_url)"}
+		}
+		if pub.IsConnected() {
+			return health.Result{Status: health.StatusHealthy}
+		}
+		return health.Result{Status: health.StatusDegraded, Message: "nats status: " + pub.Status()}
+	}))
+
 	// Storage Engine
 	database, err := db.New(&a.cfg.Storage.Local, a.logger)
 	if err != nil {
@@ -91,6 +110,15 @@ func (a *App) Run() error {
 	defer database.Close()
 
 	repository := db.NewRepository(database)
+
+	// Register DB health probe (required — readiness flips to 503 if
+	// the file lock is dropped or the file becomes unreadable).
+	healthRegistry.Register(health.NewStaticProbe("boltdb", true, func() health.Result {
+		if err := database.Healthy(); err != nil {
+			return health.Result{Status: health.StatusUnhealthy, Message: err.Error()}
+		}
+		return health.Result{Status: health.StatusHealthy}
+	}))
 
 	// ── Auth Bootstrap ───────────────────────────────────────────────
 	// PKI Authority (in-memory keystore for now; BoltDB-backed in Sprint 5)
@@ -209,6 +237,12 @@ func (a *App) Run() error {
 	})
 	pipeline.SetTopologyMapper(topoBuilder)
 
+	// Health probes (unprotected — these are scraped by orchestrators
+	// before any auth machinery is available).
+	apiServer.RegisterHandler("/healthz", api.Instrument("/healthz", health.LivenessHandler(healthRegistry).ServeHTTP))
+	apiServer.RegisterHandler("/readyz", api.Instrument("/readyz", health.ReadinessHandler(healthRegistry).ServeHTTP))
+	apiServer.RegisterHandler("/startupz", api.Instrument("/startupz", health.StartupHandler(healthRegistry).ServeHTTP))
+
 	// Register auth endpoints (unprotected)
 	apiServer.RegisterHandler("/auth/login", api.Instrument("/auth/login", api.LoginHandler(api.LoginHandlerDeps{
 		Authenticator:  authenticator,
@@ -318,6 +352,11 @@ func (a *App) Run() error {
 		a.logger.Errorw("Failed to start NAS Connector", "error", err)
 	}
 	defer nasService.Stop(ctx)
+
+	// Every required subsystem has booted — flip /startupz from
+	// "starting" to "ready". From this point on /readyz is the
+	// authoritative probe for orchestrators.
+	healthRegistry.MarkStartupComplete()
 
 	a.logger.Info("System ready and waiting for signals (Press Ctrl+C to stop)")
 

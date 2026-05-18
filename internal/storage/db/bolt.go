@@ -61,3 +61,24 @@ func (d *Database) Close() error {
 	d.logger.Info("Closing BoltDB Engine")
 	return d.db.Close()
 }
+
+// DB returns the underlying *bolt.DB. Exposed for subsystems that
+// need direct access (migrations, transparency tree, backup engine,
+// retention sweeps, health probes). Callers must not Close it — the
+// Database owns the lifetime.
+func (d *Database) DB() *bolt.DB {
+	return d.db
+}
+
+// Healthy reports whether the database can service a read transaction.
+// Used by the health probe; runs a no-op view tx to confirm the file
+// lock is still held and the file is not corrupted.
+func (d *Database) Healthy() error {
+	if d == nil || d.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return d.db.View(func(tx *bolt.Tx) error {
+		_ = tx.Bucket([]byte(BucketEvents))
+		return nil
+	})
+}

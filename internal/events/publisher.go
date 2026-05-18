@@ -89,6 +89,26 @@ func (p *Publisher) Close() {
 	}
 }
 
+// IsConnected reports whether the underlying NATS connection is
+// currently in CONNECTED state. Safe to call on a nil Publisher —
+// returns false. Used by health probes and graceful-degradation paths.
+func (p *Publisher) IsConnected() bool {
+	if p == nil || p.nc == nil {
+		return false
+	}
+	return p.nc.IsConnected()
+}
+
+// Status returns a human-readable status string for the NATS
+// connection. Returns "disabled" for nil Publishers so health probes
+// can distinguish "operator disabled NATS" from "NATS broken".
+func (p *Publisher) Status() string {
+	if p == nil || p.nc == nil {
+		return "disabled"
+	}
+	return p.nc.Status().String()
+}
+
 // Event mirrors the Spectre Event schema for JSON serialisation.
 type Event struct {
 	EventID       string         `json:"event_id"`
