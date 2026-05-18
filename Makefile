@@ -87,9 +87,9 @@ test-coverage: test ## Run tests with coverage report
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)✓ Coverage report: coverage.html$(NC)"
 
-test-integration: ## Run integration tests
+test-integration: ## Run integration tests (backup/restore cycle, etc.)
 	@echo "$(CYAN)Running integration tests...$(NC)"
-	$(GO) test -v -tags=integration ./...
+	$(GO) test -v -race -tags=integration ./...
 
 demo-sprint1: ## Run the Sprint 1 authentication end-to-end demo (asciinema-friendly)
 	@echo "$(CYAN)Running Sprint 1 auth demo...$(NC)"
