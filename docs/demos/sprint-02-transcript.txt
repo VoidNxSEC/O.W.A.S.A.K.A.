@@ -1,0 +1,104 @@
+=== RUN   TestSprint2Demo
+
+╔══════════════════════════════════════════════════════════════╗
+║   OWASAKA SIEM — Sprint 2 acceptance demo                    ║
+║   Scenario: 4 baseline roles + hot-reload + analyst recipe   ║
+╚══════════════════════════════════════════════════════════════╝
+
+────────────────────────────────────────────────────────────
+  STEP 1 — Bootstrap auth stack (PKI + JWT issuer/verifier)
+────────────────────────────────────────────────────────────
+  Signing key + Issuer + Verifier wired
+
+────────────────────────────────────────────────────────────
+  STEP 2 — Load baseline RBAC policy from configs/rbac/roles.yaml
+────────────────────────────────────────────────────────────
+  Loaded version=1
+    role viewer       (5 permission entries)
+    role auditor      (3 permission entries)
+    role admin        (1 permission entries)
+    role service      (2 permission entries)
+
+────────────────────────────────────────────────────────────
+  STEP 3 — Provision Alice (admin), Bob (viewer), Carol (auditor), Spectre (service)
+────────────────────────────────────────────────────────────
+  alice    id=p-alice roles=[admin]
+  bob      id=p-bob roles=[viewer]
+  carol    id=p-carol roles=[auditor]
+  spectre  id=p-spectre roles=[service]
+
+────────────────────────────────────────────────────────────
+  STEP 4 — Stand up protected API (each endpoint gated by a permission)
+────────────────────────────────────────────────────────────
+  Listening at http://127.0.0.1:33191
+  GET  /api/events           (events:read)
+  POST /api/events/write     (events:write)
+  GET  /api/audit?subject=…  (audit:read with not-self)
+  POST /api/rules            (rules:write)
+
+────────────────────────────────────────────────────────────
+  STEP 5 — Exercise the role/endpoint matrix
+────────────────────────────────────────────────────────────
+  bob       GET    /api/events                    → 200  ✓ — viewer reads events ✓
+  bob       POST   /api/events/write              → 403  ✓ — viewer cannot write events ✗
+  bob       GET    /api/audit?subject=other       → 403  ✓ — viewer cannot read audit ✗
+  carol     GET    /api/audit?subject=p-other     → 200  ✓ — auditor reads other's audit ✓
+  carol     GET    /api/audit?subject=p-carol     → 403  ✓ — auditor blocked on self-audit ✗
+  carol     GET    /api/events                    → 403  ✓ — auditor cannot read operational data ✗
+  alice     POST   /api/rules                     → 200  ✓ — admin writes rules ✓
+  alice     POST   /api/events/write              → 200  ✓ — admin writes events ✓
+  alice     GET    /api/audit?subject=anyone      → 200  ✓ — admin reads audit ✓
+  spectre   POST   /api/events/write              → 403  ✓ — service via plain HTTP has no cn ✗
+
+────────────────────────────────────────────────────────────
+  STEP 6 — In-process service decision with cn=spectre (mTLS attribute)
+────────────────────────────────────────────────────────────
+  Spectre + cn=spectre → events:write ✓
+  Spectre + cn=intruder → denied ✓
+
+────────────────────────────────────────────────────────────
+  STEP 7 — Append the 'analyst' recipe and hot-reload via SIGHUP
+────────────────────────────────────────────────────────────
+  Reload diff: added=[analyst]
+  SIGHUP handled; reload watcher fired ✓
+
+────────────────────────────────────────────────────────────
+  STEP 8 — Provision Dan (analyst) and verify the new permissions
+────────────────────────────────────────────────────────────
+  dan      id=p-dan roles=[analyst]
+  dan       GET    /api/events                    → 200  ✓ — analyst reads events (inherits viewer) ✓
+  dan       POST   /api/events/ack                → 200  ✓ — analyst acknowledges events ✓
+  dan       POST   /api/rules                     → 403  ✓ — analyst cannot write rules ✗
+
+────────────────────────────────────────────────────────────
+  STEP 9 — Malformed policy reload is rejected; engine keeps known-good state
+────────────────────────────────────────────────────────────
+  Reload error (expected): authz: malformed policy file: yaml: line 1: did not find expected ',' or ']'
+  Engine still serves analyst role from prior valid policy ✓
+
+────────────────────────────────────────────────────────────
+  STEP 10 — Audit sink summary — every authz decision was recorded
+────────────────────────────────────────────────────────────
+  Total decisions recorded: 15 (allow=8, deny=7)
+  First 5 reasons:
+    [allow] events:read — matched viewer:events:read
+    [deny] events:write — denied: no grant for events:write under roles [viewer]
+    [deny] audit:read — denied: no grant for audit:read under roles [viewer]
+    [allow] audit:read — matched auditor:audit:read
+    [deny] audit:read — denied: no grant for audit:read under roles [auditor]
+
+╔══════════════════════════════════════════════════════════════╗
+║   ✓ Sprint 2 demo complete — every step passed                ║
+║                                                              ║
+║   Acceptance per ADR-0061:                                   ║
+║     • viewer reads, cannot write                   ✓         ║
+║     • auditor reads audit, blocked on self          ✓         ║
+║     • auditor cannot see operational data           ✓         ║
+║     • admin can do everything                       ✓         ║
+║     • service scoped by mTLS cn condition           ✓         ║
+║     • hot-reload via ReloadFrom + SIGHUP            ✓         ║
+║     • recipe-added analyst works without rebuild    ✓         ║
+║     • malformed policy preserves prior known-good   ✓         ║
+║     • every decision audit-logged                   ✓         ║
+╚══════════════════════════════════════════════════════════════╝
+--- PASS: TestSprint2Demo (0.01s)

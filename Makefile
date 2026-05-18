@@ -95,6 +95,10 @@ demo-sprint1: ## Run the Sprint 1 authentication end-to-end demo (asciinema-frie
 	@echo "$(CYAN)Running Sprint 1 auth demo...$(NC)"
 	$(GO) test -tags=demo -v -count=1 ./internal/identity/demo/...
 
+demo-sprint2: ## Run the Sprint 2 RBAC end-to-end demo (asciinema-friendly)
+	@echo "$(CYAN)Running Sprint 2 RBAC demo...$(NC)"
+	$(GO) test -tags=demo -v -count=1 ./internal/authz/demo/...
+
 benchmark: ## Run benchmarks
 	@echo "$(CYAN)Running benchmarks...$(NC)"
 	$(GO) test -bench=. -benchmem ./...

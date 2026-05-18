@@ -32,6 +32,7 @@ them next to the transcript so reviewers can pick either format.
 | File                              | Sprint | Scope                                                                  |
 |-----------------------------------|--------|------------------------------------------------------------------------|
 | `sprint-01-transcript.txt`        | 1      | Register → login (pwd+TOTP) → JWT → API call → JWKS verify → revoke    |
+| `sprint-02-transcript.txt`        | 2      | 4 baseline roles matrix → in-process mTLS-cn → hot-reload → analyst recipe → malformed-keeps-prior |
 
 ## Anatomy of a demo test
 
