@@ -15,6 +15,7 @@ require (
 	github.com/nats-io/nkeys v0.4.15
 	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_golang v1.19.1
+	github.com/sony/gobreaker/v2 v2.4.0
 	go.etcd.io/bbolt v1.4.3
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.49.0
