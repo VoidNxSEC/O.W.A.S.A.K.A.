@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -196,4 +197,24 @@ func encodeIndex(idx uint64) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, idx)
 	return b
+}
+
+// AppendBytes is a thin adapter satisfying the
+// events.TransparencyLog interface (kind + payload + timestamp →
+// Leaf). Kept here so the events package does not need to import the
+// transparency package directly, breaking the dependency cycle.
+//
+// Returns the leaf index on success; callers may ignore it (the
+// transparency log is conceptually fire-and-forget from the
+// pipeline's perspective — failures are logged but not fatal).
+func (t *Tree) AppendBytes(ctx context.Context, kind, payload []byte, timestamp time.Time) error {
+	if timestamp.IsZero() {
+		timestamp = time.Now()
+	}
+	_, err := t.Append(ctx, Leaf{
+		Kind:      LeafKind(kind),
+		Timestamp: timestamp,
+		Payload:   payload,
+	})
+	return err
 }

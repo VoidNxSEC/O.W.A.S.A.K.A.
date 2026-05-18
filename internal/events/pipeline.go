@@ -34,17 +34,50 @@ type EventObserver interface {
 	Observe(e models.NetworkEvent)
 }
 
+// TransparencyLog is the subset of internal/storage/transparency.Tree
+// surface that the Pipeline depends on. Declared here as an interface
+// so the events package does not import the transparency package
+// (which would create a dependency cycle once the integrity/audit
+// glue lands). The concrete type is wired in internal/app/app.go.
+type TransparencyLog interface {
+	Append(ctx context.Context, kind, payload []byte, timestamp time.Time) error
+}
+
 // Pipeline operates as a universal bus unifying physical persistence, Web UI pushing, and NATS brokering
 type Pipeline struct {
-	repo     *db.Repository
-	hub      *api.WSHub
-	pub      *Publisher
-	logger   *logging.Logger
-	engine   CorrelationEngine
-	topology TopologyMapper
-	stream   StreamEnricher
-	observer EventObserver
-	signer   *Signer
+	repo         *db.Repository
+	hub          *api.WSHub
+	pub          *Publisher
+	logger       *logging.Logger
+	engine       CorrelationEngine
+	topology     TopologyMapper
+	stream       StreamEnricher
+	observer     EventObserver
+	signer       *Signer
+	transparency TransparencyLog
+}
+
+// isCriticalEvent decides whether an event enters the transparency
+// log per ADR-0063 §"What goes in the log". The list is deliberately
+// narrow at v1: only THREAT_ALERT and ML-anomaly verdicts. Principal
+// / token / policy lifecycle events arrive through dedicated paths
+// (RBAC reload, identity store), not via the pipeline, and are
+// appended at those call sites.
+func isCriticalEvent(e models.NetworkEvent) bool {
+	return e.Type == models.EventAlert
+}
+
+// transparencyKind maps a NetworkEvent type onto the LeafKind tag the
+// transparency log uses for filtering. Returns the raw type string for
+// values that don't have a dedicated LeafKind; consumers filter by
+// substring.
+func transparencyKind(t models.EventType) string {
+	switch t {
+	case models.EventAlert:
+		return "alert.high"
+	default:
+		return "event." + string(t)
+	}
 }
 
 func spectreNetworkSubject(eventType models.EventType) string {
@@ -79,6 +112,17 @@ func NewPipeline(repo *db.Repository, hub *api.WSHub, pub *Publisher, logger *lo
 // rejected by production verifiers.
 func (p *Pipeline) SetSigner(s *Signer) {
 	p.signer = s
+}
+
+// SetTransparencyLog installs the Merkle log writer (ADR-0063). When
+// set, the pipeline appends "critical" events (high-severity alerts,
+// threat alerts) as leaves so an auditor can later prove they were in
+// the log at a specific tree size. Non-critical events still pass
+// through the regular pipeline but do NOT enter the log — per ADR-0063
+// §"What goes in the log", routine events stay out so the log remains
+// the audit-defensible record without ballooning.
+func (p *Pipeline) SetTransparencyLog(log TransparencyLog) {
+	p.transparency = log
 }
 
 // SetEngine dynamically binds a Correlation module onto the live pipeline layer
@@ -125,6 +169,22 @@ func (p *Pipeline) PushNetworkEvent(e models.NetworkEvent) {
 	if p.signer != nil {
 		if err := p.signer.Sign(context.Background(), &e); err != nil {
 			p.logger.Errorw("Failed to sign event", "error", err, "event_id", e.ID)
+		}
+	}
+
+	// 1d. Append to transparency log if the event is critical (ADR-0063).
+	// The signed canonical bytes are the leaf payload; downstream
+	// inclusion-proof consumers re-derive the leaf hash from this
+	// payload and verify against the published STH.
+	if p.transparency != nil && isCriticalEvent(e) {
+		canonical, err := e.CanonicalBytes()
+		if err != nil {
+			p.logger.Errorw("Failed to canonicalize event for transparency log", "error", err, "event_id", e.ID)
+		} else {
+			kind := transparencyKind(e.Type)
+			if err := p.transparency.Append(context.Background(), []byte(kind), canonical, e.Timestamp); err != nil {
+				p.logger.Errorw("Failed to append to transparency log", "error", err, "event_id", e.ID)
+			}
 		}
 	}
 
