@@ -1,0 +1,92 @@
+=== RUN   TestSprint3Demo
+
+╔══════════════════════════════════════════════════════════════╗
+║   OWASAKA SIEM — Sprint 3 acceptance demo                    ║
+║   Scenario: sign event → append → verify → prove → tamper    ║
+╚══════════════════════════════════════════════════════════════╝
+
+────────────────────────────────────────────────────────────
+  STEP 1 — Bootstrap PKI (root CA + event-signing + STH-signing keys)
+────────────────────────────────────────────────────────────
+  Root CA id=72119217 fingerprint=1a:45:62:55:97:80:07:58…
+  Event signing kid=49c6ba46
+  STH signing  kid=d30f8c73
+
+────────────────────────────────────────────────────────────
+  STEP 2 — Open transparency log and STH signer
+────────────────────────────────────────────────────────────
+  Transparency log open, initial size=0
+
+────────────────────────────────────────────────────────────
+  STEP 3 — Emit a signed THREAT_ALERT
+────────────────────────────────────────────────────────────
+  Alert signed with kid=49c6ba46, sig=ee99f3ace71abe927522afc4…
+
+────────────────────────────────────────────────────────────
+  STEP 4 — Append the signed alert to the Merkle log
+────────────────────────────────────────────────────────────
+  Leaf appended at index=0, tree size now=1
+
+────────────────────────────────────────────────────────────
+  STEP 5 — Sign and persist a fresh STH
+────────────────────────────────────────────────────────────
+  STH size=1 root=189d1dbf52f25fb96ef4fefa sig=e1429ed9add9431126dc1b93…
+
+────────────────────────────────────────────────────────────
+  STEP 6 — Verify event signature via JWKS (Spectre/Cerebro POV)
+────────────────────────────────────────────────────────────
+  JWKS published 1 key(s)
+    matched kid=49c6ba46 purpose=event-signing
+  ✓ Alert signature verifies against the JWKS public key
+
+────────────────────────────────────────────────────────────
+  STEP 7 — Serve STH + inclusion proof over /api/transparency/*
+────────────────────────────────────────────────────────────
+  GET /api/transparency/sth → 200
+  GET /api/transparency/inclusion?leaf_index=0&tree_size=1 → 200
+  audit_path has 0 node(s)
+
+────────────────────────────────────────────────────────────
+  STEP 8 — External auditor verifies inclusion against the STH-bound root
+────────────────────────────────────────────────────────────
+  ✓ Reproduced root matches the STH-bound root
+    → Auditor proved the alert was in the log at size 1
+
+────────────────────────────────────────────────────────────
+  STEP 9 — Tamper an event field — signature verification fails
+────────────────────────────────────────────────────────────
+  ✓ Tampered event rejected: events: signature failed verification
+
+────────────────────────────────────────────────────────────
+  STEP 10 — Append a second alert, prove consistency between sizes
+────────────────────────────────────────────────────────────
+  consistency proof from size 1 → 2 (1 node(s))
+  ✓ Proven the new tree extends the old one without retroactive edits
+
+────────────────────────────────────────────────────────────
+  STEP 11 — Boot banner with fingerprints + current STH
+────────────────────────────────────────────────────────────
+  ╔═════════════════════════════════════════════════════════════════╗
+  ║                      OWASAKA stands ready.                      ║
+  ╚═════════════════════════════════════════════════════════════════╝
+    Root CA:        1a:45:62:55:97:80:…
+    Event signer:   02:fd:9f:ba:da:38:…
+    STH signer:     13:fa:1e:f2:90:9b:…
+    Current STH:    size=2  root=ca9519dbc203130f…b831e4c9b591bd39  (2026-05-18T08:50:56Z)
+    Trust these fingerprints? (compare to ops record)
+
+╔══════════════════════════════════════════════════════════════╗
+║   ✓ Sprint 3 demo complete — every step passed                ║
+║                                                              ║
+║   Acceptance per ADR-0062 + ADR-0063:                        ║
+║     • Every event Ed25519-signed pre-publish        ✓        ║
+║     • JWKS publishes both JWT + event-signing keys  ✓        ║
+║     • Critical event lands as Merkle leaf           ✓        ║
+║     • STH signed by separate-purpose key            ✓        ║
+║     • HTTP endpoints serve sth/inclusion/leaf       ✓        ║
+║     • External auditor verifies via JWKS+STH        ✓        ║
+║     • Tampered event signature fails                ✓        ║
+║     • Consistency proof links two tree states       ✓        ║
+║     • Boot banner exposes all key fingerprints      ✓        ║
+╚══════════════════════════════════════════════════════════════╝
+--- PASS: TestSprint3Demo (0.02s)

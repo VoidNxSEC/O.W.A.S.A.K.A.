@@ -33,6 +33,7 @@ them next to the transcript so reviewers can pick either format.
 |-----------------------------------|--------|------------------------------------------------------------------------|
 | `sprint-01-transcript.txt`        | 1      | Register → login (pwd+TOTP) → JWT → API call → JWKS verify → revoke    |
 | `sprint-02-transcript.txt`        | 2      | 4 baseline roles matrix → in-process mTLS-cn → hot-reload → analyst recipe → malformed-keeps-prior |
+| `sprint-03-transcript.txt`        | 3      | sign event → JWKS verify → Merkle append → STH → inclusion proof → tamper-detect → consistency proof |
 
 ## Anatomy of a demo test
 

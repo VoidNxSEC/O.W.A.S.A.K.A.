@@ -99,6 +99,10 @@ demo-sprint2: ## Run the Sprint 2 RBAC end-to-end demo (asciinema-friendly)
 	@echo "$(CYAN)Running Sprint 2 RBAC demo...$(NC)"
 	$(GO) test -tags=demo -v -count=1 ./internal/authz/demo/...
 
+demo-sprint3: ## Run the Sprint 3 provenance (signing + Merkle log) demo
+	@echo "$(CYAN)Running Sprint 3 provenance demo...$(NC)"
+	$(GO) test -tags=demo -v -count=1 ./internal/storage/transparency/demo/...
+
 benchmark: ## Run benchmarks
 	@echo "$(CYAN)Running benchmarks...$(NC)"
 	$(GO) test -bench=. -benchmem ./...
