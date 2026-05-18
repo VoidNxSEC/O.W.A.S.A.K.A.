@@ -54,11 +54,6 @@ func LoginHandler(deps LoginHandlerDeps) http.HandlerFunc {
 				Kind:    identity.CredentialPassword,
 				Subject: req.Username,
 				Proof:   []byte(req.Password),
-			},
-			{
-				Kind:    identity.CredentialPassword,
-				Subject: req.Username,
-				Proof:   []byte(req.Password),
 				Extra:   map[string]any{"totp": req.TOTP},
 			},
 		}

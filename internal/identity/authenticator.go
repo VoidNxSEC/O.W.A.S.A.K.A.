@@ -71,8 +71,16 @@ func (a *defaultAuthenticator) Authenticate(ctx context.Context, factors []AuthF
 	// Enforce factor-count policy per principal type.
 	switch p.Type {
 	case PrincipalHuman:
-		if len(factors) < 2 {
-			return nil, fmt.Errorf("%w: human requires password+TOTP", ErrInsufficientFactor)
+		// CredentialPassword already verifies both password+TOTP in one
+		// call, so a single factor of that kind satisfies MFA.
+		if kind == CredentialPassword {
+			if len(factors) != 1 {
+				return nil, fmt.Errorf("%w: password+TOTP expects single combined factor", ErrInsufficientFactor)
+			}
+		} else {
+			if len(factors) < 2 {
+				return nil, fmt.Errorf("%w: human requires password+TOTP or WebAuthn", ErrInsufficientFactor)
+			}
 		}
 	case PrincipalService:
 		if kind != CredentialMTLS {
