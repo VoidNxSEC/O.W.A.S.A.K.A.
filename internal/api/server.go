@@ -20,6 +20,14 @@ type Server struct {
 	httpServer *http.Server
 	Hub        *WSHub
 	mux        *http.ServeMux
+
+	// Auth components (optional — nil means no auth, dev mode or unsecured)
+	authMiddleware interface {
+		RequireAuth(next http.Handler) http.Handler
+	}
+	authzMiddleware interface {
+		RequirePermission(resource, action string, next http.Handler) http.Handler
+	}
 }
 
 // responseWriter wraps http.ResponseWriter to capture the status code.
@@ -70,6 +78,25 @@ func NewServer(cfg *config.ServerConfig, logger *logging.Logger) *Server {
 // RegisterHandler registers an HTTP handler before or after Start
 func (s *Server) RegisterHandler(path string, handler http.HandlerFunc) {
 	s.mux.HandleFunc(path, handler)
+}
+
+// RegisterProtectedHandler registers a handler behind the auth middleware.
+// If no auth middleware is configured, the handler is registered unprotected
+// with a warning log.
+func (s *Server) RegisterProtectedHandler(path string, handler http.HandlerFunc) {
+	if s.authMiddleware != nil {
+		s.mux.Handle(path, s.authMiddleware.RequireAuth(http.HandlerFunc(handler)))
+	} else {
+		s.logger.Warnw("registering unprotected handler (no auth middleware)", "path", path)
+		s.mux.HandleFunc(path, handler)
+	}
+}
+
+// SetAuthMiddleware injects the identity middleware for RequireAuth wrappers.
+func (s *Server) SetAuthMiddleware(mw interface {
+	RequireAuth(next http.Handler) http.Handler
+}) {
+	s.authMiddleware = mw
 }
 
 // Start opens the main port listeners
