@@ -17,6 +17,7 @@ coverage.txt
 
 # Dependency directories
 vendor/
+node_modules/
 
 # Go workspace file
 go.work
@@ -58,6 +59,7 @@ data/
 dist/
 build/
 bin/
+.docusaurus/
 
 # Nix build symlink
 result

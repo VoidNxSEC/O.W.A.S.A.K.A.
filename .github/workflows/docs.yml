@@ -1,41 +1,66 @@
 name: Deploy docs
 
 on:
-    push:
-        branches:
-            - main
-        tags:
-            - "v*"
-    # Allows you to run this workflow manually from the Actions tab
-    workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-    deploy:
-        runs-on: ubuntu-latest
-        permissions:
-            contents: write
-        concurrency:
-            group: ${{ github.workflow }}
-        steps:
-            - uses: actions/checkout@v6
-              with:
-                  fetch-depth: 0
+  build:
+    name: Build Docusaurus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-            - uses: cachix/install-nix-action@v31
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.1
+          run_install: false
 
-            - name: Configure Git user
-              run: |
-                  git config --local user.email "github-actions[bot]@users.noreply.github.com"
-                  git config --local user.name "github-actions[bot]"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
 
-            - name: Deploy main
-              if: github.ref_name == 'main'
-              run: |
-                  nix develop ./docs --command bash -c "cd docs && mike deploy -p main"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-            - name: Deploy version
-              if: startsWith(github.ref, 'refs/tags/v')
-              run: |
-                  REF_NAME=${{ github.ref_name }}
-                  MAJOR_MINOR=${REF_NAME%.*}
-                  nix develop ./docs --command bash -c "cd docs && mike deploy -p -u ${MAJOR_MINOR} latest"
+      - name: Build documentation
+        env:
+          BASE_URL: /${{ github.event.repository.name }}/
+          SITE_URL: https://${{ github.repository_owner }}.github.io
+        run: pnpm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
