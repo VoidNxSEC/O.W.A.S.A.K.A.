@@ -35,8 +35,8 @@ Layer 5: Audit & Integrity (immutable logs)
 **Principle**: Simple, efficient, beautiful
 
 - Clean, modern UI with dark mode
-- <500MB memory footprint (idle)
-- <100ms UI response time (p95)
+- &lt;500MB memory footprint (idle)
+- &lt;100ms UI response time (p95)
 - Single binary deployment
 
 ### 4. Signal Over Noise
@@ -388,12 +388,12 @@ Layer 5: Audit & Integrity (immutable logs)
 
 | Metric | Target | Measured (PHASE 0) |
 |--------|--------|-------------------|
-| Memory (idle) | <500MB | TBD |
-| Memory (active) | <2GB | TBD |
-| CPU (idle) | <5% | TBD |
-| CPU (scanning) | <50% | TBD |
-| Disk I/O | <100MB/s | TBD |
-| Network overhead | <5% bandwidth | TBD |
+| Memory (idle) | &lt;500MB | TBD |
+| Memory (active) | &lt;2GB | TBD |
+| CPU (idle) | &lt;5% | TBD |
+| CPU (scanning) | &lt;50% | TBD |
+| Disk I/O | &lt;100MB/s | TBD |
+| Network overhead | &lt;5% bandwidth | TBD |
 
 ### Scalability
 

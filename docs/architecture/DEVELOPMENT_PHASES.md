@@ -136,7 +136,7 @@ go get github.com/google/gopacket/pcap
 - [ ] Network scanner discovers all devices on local subnet
 - [ ] Topology graph accurately represents network
 - [ ] All components have >80% test coverage
-- [ ] Performance: <100ms DNS lookup, <50ms proxy overhead
+- [ ] Performance: &lt;100ms DNS lookup, &lt;50ms proxy overhead
 
 ### Testing Plan
 
@@ -250,7 +250,7 @@ go get github.com/docker/docker/client
 
 - [ ] Discovers all physical devices
 - [ ] Discovers all VMs and containers
-- [ ] Scans all 65535 ports (TCP) in <60s
+- [ ] Scans all 65535 ports (TCP) in &lt;60s
 - [ ] Detects dormant and ghost services
 - [ ] Change detection triggers alerts
 - [ ] All components have >80% test coverage
@@ -353,10 +353,10 @@ npm install chart.js
 ### Success Criteria
 
 - [ ] Real-time updates via WebSocket
-- [ ] <100ms UI response time
+- [ ] &lt;100ms UI response time
 - [ ] Dark mode by default
 - [ ] Responsive design (desktop focus)
-- [ ] Bundle size <500KB (gzipped)
+- [ ] Bundle size &lt;500KB (gzipped)
 
 ---
 
@@ -454,7 +454,7 @@ go get github.com/bradleyjkemp/sigma-go  # SIGMA support
 
 - [ ] Processes >10,000 events/sec
 - [ ] SIGMA rules work correctly
-- [ ] Anomaly detection <5% false positives
+- [ ] Anomaly detection &lt;5% false positives
 - [ ] Correlation across multiple sources
 - [ ] All components have >80% test coverage
 

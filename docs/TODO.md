@@ -162,12 +162,12 @@ go get github.com/tebeka/selenium
 
 | Métrica | Target |
 |---------|--------|
-| UI response (p95) | <100ms |
-| Memory idle | <500MB |
-| DNS lookup | <100ms |
-| Port scan (65535) | <60s |
+| UI response (p95) | &lt;100ms |
+| Memory idle | &lt;500MB |
+| DNS lookup | &lt;100ms |
+| Port scan (65535) | &lt;60s |
 | Events/sec stream | >10.000 |
-| Anomaly false positives | <5% |
+| Anomaly false positives | &lt;5% |
 
 ---
 
