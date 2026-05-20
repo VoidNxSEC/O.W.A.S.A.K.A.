@@ -20,8 +20,36 @@ type Config struct {
 	Performance PerformanceConfig `yaml:"performance"`
 	Metrics     MetricsConfig     `yaml:"metrics"`
 	Debug       DebugConfig       `yaml:"debug"`
-	Security    SecurityConfig    `yaml:"security"`
-	NatsURL     string            `yaml:"nats_url"`
+	Security      SecurityConfig      `yaml:"security"`
+	Observability ObservabilityConfig `yaml:"observability"`
+	NatsURL       string              `yaml:"nats_url"`
+}
+
+// ObservabilityConfig controls OpenTelemetry tracing and metrics
+// emission. Disabled by default (air-gap-first): an operator must opt
+// in to ship telemetry over the network.
+type ObservabilityConfig struct {
+	Traces  TracesConfig  `yaml:"traces"`
+	Metrics MetricsToggle `yaml:"metrics"`
+}
+
+// TracesConfig configures the OTLP gRPC tracer exporter. When
+// Enabled=false the tracer provider is a no-op — spans are created
+// for code clarity but nothing is exported.
+type TracesConfig struct {
+	Enabled        bool    `yaml:"enabled"`
+	Endpoint       string  `yaml:"endpoint"`         // e.g. tempo.observability:4317
+	ServiceName    string  `yaml:"service_name"`     // defaults to "oswaka"
+	Environment    string  `yaml:"environment"`      // production / staging / dev
+	SamplingRatio  float64 `yaml:"sampling_ratio"`   // 0.0-1.0; default 1.0 when enabled
+	Insecure       bool    `yaml:"insecure"`         // skip TLS to collector (dev only)
+}
+
+// MetricsToggle is a thin on/off for the Prometheus scrape endpoint.
+// The /metrics handler is wired regardless — this toggle gates whether
+// the binary registers the expanded Sprint 6 metric set.
+type MetricsToggle struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // ServerConfig holds HTTP server configuration

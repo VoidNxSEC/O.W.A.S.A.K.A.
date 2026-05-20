@@ -1,10 +1,12 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -110,5 +112,33 @@ func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
 	}
 	return &Logger{
 		SugaredLogger: l.With(args...),
+	}
+}
+
+// WithContext returns a logger that emits the active trace_id and
+// span_id (W3C trace-context) on every line. When ctx carries no
+// active span, the receiver is returned unchanged — no allocation
+// penalty for code paths outside a trace.
+//
+// Usage:
+//
+//	logger.WithContext(ctx).Infow("event published", "id", e.ID)
+//
+// The two fields use the conventional OpenTelemetry log key names
+// (`trace_id`, `span_id`) so Loki / Grafana / Tempo cross-correlation
+// works out of the box.
+func (l *Logger) WithContext(ctx context.Context) *Logger {
+	if l == nil || ctx == nil {
+		return l
+	}
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		return l
+	}
+	return &Logger{
+		SugaredLogger: l.With(
+			"trace_id", sc.TraceID().String(),
+			"span_id", sc.SpanID().String(),
+		),
 	}
 }
