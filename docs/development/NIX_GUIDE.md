@@ -1,4 +1,4 @@
-# O.W.A.S.A.K.A. SIEM - Nix Development Guide
+# OWASAKA SIEM - Nix Development Guide
 
 ## Overview
 
@@ -44,31 +44,37 @@ You'll see the O.W.A.S.A.K.A. welcome banner and a fully configured development 
 ### Included Tools
 
 #### Core Development
+
 - **Go 1.22+** - Latest stable Go compiler
 - **gotools** - godoc, goimports, etc.
 - **gopls** - Go language server (LSP)
 - **delve** - Go debugger
 
 #### Go Development Tools
+
 - **golangci-lint** - Comprehensive Go linter
 - **air** - Hot reload for Go applications
 - **gotest** - Enhanced testing
 - **gotestsum** - Pretty test output
 
 #### Build Tools
+
 - **Make** - Build automation
 - **GCC** - C compiler (for cgo)
 - **pkg-config** - Package configuration
 
 #### Frontend Development
+
 - **Node.js 20 LTS** - JavaScript runtime
 - **npm** - Package manager
 - **pnpm** - Fast package manager alternative
 
 #### Browser Integration
+
 - **Firefox ESR** - For browser integration testing
 
 #### Network Analysis (PHASE 1)
+
 - **nmap** - Network scanner
 - **tcpdump** - Packet capture
 - **tshark** - Terminal Wireshark
@@ -79,18 +85,22 @@ You'll see the O.W.A.S.A.K.A. welcome banner and a fully configured development 
 - **iperf3** - Network performance testing
 
 #### Container Tools (PHASE 2)
+
 - **Docker** - Container runtime
 - **docker-compose** - Multi-container orchestration
 
 #### Security Tools
+
 - **OpenSSL** - SSL/TLS toolkit
 - **GnuPG** - Cryptographic signing
 
 #### Documentation
+
 - **mdbook** - Markdown documentation generator
 - **graphviz** - Graph/diagram generation
 
 #### Utilities
+
 - **jq** - JSON processor
 - **yq** - YAML processor
 - **ripgrep (rg)** - Fast text search
@@ -106,6 +116,7 @@ You'll see the O.W.A.S.A.K.A. welcome banner and a fully configured development 
 The development environment provides `oswaka-dev` wrapper for common tasks:
 
 ### Build & Run
+
 ```bash
 oswaka-dev build          # Build the project
 oswaka-dev run            # Build and run
@@ -113,6 +124,7 @@ oswaka-dev watch          # Hot reload development mode
 ```
 
 ### Testing
+
 ```bash
 oswaka-dev test           # Run all tests
 oswaka-dev test-coverage  # Tests with coverage report
@@ -120,6 +132,7 @@ oswaka-dev bench          # Run benchmarks
 ```
 
 ### Code Quality
+
 ```bash
 oswaka-dev lint           # Run linters
 oswaka-dev fmt            # Format code
@@ -127,6 +140,7 @@ oswaka-dev check          # Run all checks
 ```
 
 ### Network Tools
+
 ```bash
 oswaka-dev scan-network   # Quick network scan
 oswaka-dev capture        # Start packet capture
@@ -134,11 +148,13 @@ oswaka-dev dns-test       # Test DNS resolution
 ```
 
 ### Documentation
+
 ```bash
 oswaka-dev docs           # Serve documentation
 ```
 
 ### Utilities
+
 ```bash
 oswaka-dev clean          # Clean build artifacts
 oswaka-dev info           # Show project info
@@ -152,6 +168,7 @@ oswaka-dev help           # Show all commands
 The development shell provides convenient aliases:
 
 ### Build Aliases
+
 ```bash
 dev           # oswaka-dev wrapper
 build         # make build
@@ -161,6 +178,7 @@ lint          # make lint
 ```
 
 ### Network Analysis
+
 ```bash
 scan          # sudo nmap -sn (network scan)
 capture       # sudo tcpdump -i any (packet capture)
@@ -168,6 +186,7 @@ dns           # dig @8.8.8.8 (DNS query)
 ```
 
 ### Navigation
+
 ```bash
 docs          # cd docs
 internal      # cd internal
@@ -175,12 +194,14 @@ configs       # cd configs
 ```
 
 ### Git Helpers
+
 ```bash
 git-status    # git status -sb (short format)
 git-log       # git log --oneline --graph -10
 ```
 
 ### Testing
+
 ```bash
 gotest        # go test -v -race -coverprofile=coverage.out
 ```
@@ -192,6 +213,7 @@ gotest        # go test -v -race -coverprofile=coverage.out
 The development shell sets up:
 
 ### Go Configuration
+
 ```bash
 GOPATH="$HOME/go"
 GOBIN="$GOPATH/bin"
@@ -202,18 +224,21 @@ GOMAXPROCS=$(nproc)
 ```
 
 ### Project Configuration
+
 ```bash
 OSWAKA_ENV="development"
 OSWAKA_CONFIG="$PWD/configs/examples/default.yaml"
 ```
 
 ### Node.js Configuration
+
 ```bash
 NODE_ENV="development"
 NPM_CONFIG_PREFIX="$PWD/.npm-global"
 ```
 
 ### Privacy (Telemetry Disabled)
+
 ```bash
 CHECKPOINT_DISABLE=1
 DO_NOT_TRACK=1
@@ -237,11 +262,13 @@ air
 ```
 
 **Watched files:**
+
 - `*.go` (except tests)
 - `*.yaml`, `*.yml`
 - `*.html`, `*.tpl`, `*.tmpl`
 
 **Excluded:**
+
 - `*_test.go`
 - `tmp/`, `vendor/`, `.git/`, `.cache/`
 - `web/node_modules/`
@@ -251,6 +278,7 @@ air
 ## Building with Nix
 
 ### Build the Package
+
 ```bash
 # Build oswaka using Nix
 nix build
@@ -260,6 +288,7 @@ nix build
 ```
 
 ### Run Directly
+
 ```bash
 # Run without building
 nix run
@@ -275,11 +304,13 @@ nix run . -- --config configs/examples/default.yaml
 ### VSCode / VSCodium
 
 Install the Nix Environment Selector extension:
+
 ```bash
 code --install-extension arrterian.nix-env-selector
 ```
 
 Add to `.vscode/settings.json`:
+
 ```json
 {
   "nix.enableLanguageServer": true,
@@ -295,6 +326,7 @@ Add to `.vscode/settings.json`:
 ### Neovim
 
 With `direnv` integration:
+
 ```bash
 # Install direnv
 nix-env -iA nixpkgs.direnv
@@ -307,6 +339,7 @@ direnv allow
 ### Emacs
 
 Install `nix-mode` and `direnv-mode`:
+
 ```elisp
 (use-package nix-mode
   :mode "\\.nix\\'")
@@ -321,6 +354,7 @@ Install `nix-mode` and `direnv-mode`:
 ## Troubleshooting
 
 ### Flake is Too Old
+
 ```bash
 # Update flake inputs
 nix flake update
@@ -331,7 +365,9 @@ nix develop
 ```
 
 ### Missing Permissions for Network Tools
+
 Some tools require elevated privileges:
+
 ```bash
 # For nmap, tcpdump, etc.
 sudo -E oswaka-dev scan-network
@@ -339,6 +375,7 @@ sudo -E oswaka-dev capture
 ```
 
 ### Go Module Issues
+
 ```bash
 # Clean Go cache
 rm -rf .cache/go-build .cache/go-mod
@@ -349,6 +386,7 @@ go mod tidy
 ```
 
 ### Shell Hook Not Running
+
 ```bash
 # Force reload
 nix develop --command bash
@@ -439,11 +477,13 @@ jobs:
 ## Clean Up
 
 ### Exit Development Shell
+
 ```bash
 exit
 ```
 
 ### Garbage Collect Nix Store
+
 ```bash
 # Remove unused packages
 nix-collect-garbage

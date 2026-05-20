@@ -1,4 +1,4 @@
-# O.W.A.S.A.K.A. SIEM - Development Documentation
+# OWASAKA SIEM - Development Documentation
 
 This directory contains development guides and documentation for contributors.
 
@@ -15,11 +15,13 @@ This directory contains development guides and documentation for contributors.
 ### 1. Environment Setup
 
 **Recommended: Nix Flakes**
+
 ```bash
 nix develop
 ```
 
 **Alternative: Manual**
+
 ```bash
 make deps
 ```
@@ -87,11 +89,13 @@ oswaka-dev info           # Project info
 ### Make Targets
 
 See `Makefile` for all targets:
+
 ```bash
 make help
 ```
 
 Common targets:
+
 - `make build` - Build binary
 - `make test` - Run tests
 - `make lint` - Run linters
@@ -104,6 +108,7 @@ Common targets:
 Available in Nix environment:
 
 ### Scanning
+
 ```bash
 # Network discovery
 nmap -sn 192.168.1.0/24
@@ -116,6 +121,7 @@ nmap -sV -p 80,443 192.168.1.1
 ```
 
 ### Packet Capture
+
 ```bash
 # Capture all traffic
 sudo tcpdump -i any -w capture.pcap
@@ -128,6 +134,7 @@ tshark -r capture.pcap
 ```
 
 ### DNS Analysis
+
 ```bash
 # Query DNS
 dig @8.8.8.8 google.com
@@ -147,11 +154,13 @@ curl -H 'accept: application/dns-json' \
 ### VSCode
 
 Recommended extensions:
+
 - Go (golang.go)
 - Nix Environment Selector (arrterian.nix-env-selector)
 - EditorConfig (editorconfig.editorconfig)
 
 Settings (`.vscode/settings.json`):
+
 ```json
 {
   "go.useLanguageServer": true,
@@ -164,12 +173,14 @@ Settings (`.vscode/settings.json`):
 ### Neovim
 
 With direnv:
+
 ```bash
 echo "use flake" > .envrc
 direnv allow
 ```
 
 LSP configuration:
+
 ```lua
 require('lspconfig').gopls.setup{}
 require('lspconfig').nil_ls.setup{}  -- Nix LSP
@@ -193,6 +204,7 @@ dlv attach <pid>
 ```
 
 In Delve:
+
 ```
 (dlv) break main.main
 (dlv) continue
@@ -203,6 +215,7 @@ In Delve:
 ### VSCode Debugging
 
 `.vscode/launch.json`:
+
 ```json
 {
   "version": "0.2.0",
@@ -224,6 +237,7 @@ In Delve:
 ## Performance Profiling
 
 ### CPU Profiling
+
 ```bash
 # Build with profiling
 go build -o oswaka ./cmd/oswaka
@@ -236,6 +250,7 @@ go tool pprof cpu.prof
 ```
 
 ### Memory Profiling
+
 ```bash
 # Run with memory profile
 ./oswaka --memprofile=mem.prof
@@ -247,6 +262,7 @@ go tool pprof mem.prof
 ### Live Profiling (pprof)
 
 If debug.pprof is enabled in config:
+
 ```bash
 # CPU profile
 go tool pprof http://localhost:6060/debug/pprof/profile
@@ -263,6 +279,7 @@ go tool pprof http://localhost:6060/debug/pprof/goroutine
 ## Git Workflow
 
 ### Branch Naming
+
 - `feature/description` - New features
 - `fix/description` - Bug fixes
 - `refactor/description` - Code refactoring
@@ -272,6 +289,7 @@ go tool pprof http://localhost:6060/debug/pprof/goroutine
 ### Commit Messages
 
 Follow Conventional Commits:
+
 ```
 feat: Add DNS resolver with query logging
 fix: Resolve memory leak in packet capture
@@ -281,6 +299,7 @@ test: Add integration tests for discovery engine
 ```
 
 ### Before Committing
+
 ```bash
 # Format code
 make fmt
@@ -317,6 +336,7 @@ jobs:
 ## Resources
 
 ### O.W.A.S.A.K.A. Documentation
+
 - [Architecture Overview](../architecture/OVERVIEW.md)
 - [Data Model](../architecture/DATA_MODEL.md)
 - [Development Phases](../architecture/DEVELOPMENT_PHASES.md)
@@ -324,6 +344,7 @@ jobs:
 - [Deployment Guide](../deployment/README.md)
 
 ### External Resources
+
 - [Go Documentation](https://go.dev/doc/)
 - [Nix Manual](https://nixos.org/manual/nix/stable/)
 - [Air (Hot Reload)](https://github.com/cosmtrek/air)

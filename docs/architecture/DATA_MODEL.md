@@ -1,4 +1,4 @@
-# O.W.A.S.A.K.A. SIEM - Data Model
+# OWASAKA SIEM - Data Model
 
 ## Overview
 

@@ -1,4 +1,4 @@
-# O.W.A.S.A.K.A. SIEM - Development Phases
+# OWASAKA SIEM - Development Phases
 
 ## Development Strategy
 
@@ -43,9 +43,11 @@ This document outlines the phased development approach for building the O.W.A.S.
 ### Components to Build
 
 #### 1.1 High-Performance DNS Resolver
+
 **Location**: `internal/network/dns/`
 
 **Files to Create**:
+
 - `resolver.go` - Core DNS resolver
 - `cache.go` - Query caching with TTL
 - `logger.go` - Query logging
@@ -53,6 +55,7 @@ This document outlines the phased development approach for building the O.W.A.S.
 - `resolver_test.go` - Unit tests
 
 **Features**:
+
 - Custom DNS resolver with complete query logging
 - DNS-over-HTTPS (DoH) support
 - Query pattern analysis
@@ -60,15 +63,18 @@ This document outlines the phased development approach for building the O.W.A.S.
 - Metrics: queries/sec, cache hit ratio, anomaly score
 
 **Dependencies**:
+
 ```
 go get golang.org/x/net/dns
 go get github.com/miekg/dns
 ```
 
 #### 1.2 Transparent Proxy Engine
+
 **Location**: `internal/network/proxy/`
 
 **Files to Create**:
+
 - `proxy.go` - HTTP/HTTPS proxy server
 - `interceptor.go` - Request/response interception
 - `tls.go` - mTLS termination & cert generation
@@ -77,6 +83,7 @@ go get github.com/miekg/dns
 - `proxy_test.go` - Unit tests
 
 **Features**:
+
 - mTLS termination for SSL/TLS inspection
 - Multi-protocol support (HTTP/HTTPS/WebSocket/gRPC)
 - Deep Packet Inspection (DPI)
@@ -84,15 +91,18 @@ go get github.com/miekg/dns
 - Connection pooling
 
 **Dependencies**:
+
 ```
 go get github.com/elazarl/goproxy
 go get golang.org/x/net/http2
 ```
 
 #### 1.3 Network Discovery Scanner
+
 **Location**: `internal/network/discovery/`
 
 **Files to Create**:
+
 - `scanner.go` - Network scanner orchestrator
 - `arp.go` - ARP scanning
 - `icmp.go` - ICMP (ping) scanning
@@ -102,21 +112,25 @@ go get golang.org/x/net/http2
 - `scanner_test.go` - Unit tests
 
 **Features**:
+
 - Active discovery (ARP, ICMP, mDNS)
 - Passive fingerprinting via traffic analysis
 - Device classification
 - Concurrent scanning with rate limiting
 
 **Dependencies**:
+
 ```
 go get github.com/google/gopacket
 go get github.com/google/gopacket/pcap
 ```
 
 #### 1.4 Network Topology Mapper
+
 **Location**: `internal/network/topology/`
 
 **Files to Create**:
+
 - `graph.go` - Graph data structure
 - `builder.go` - Topology construction
 - `differ.go` - Change detection
@@ -124,6 +138,7 @@ go get github.com/google/gopacket/pcap
 - `graph_test.go` - Unit tests
 
 **Features**:
+
 - Relationship graph construction
 - Device categorization
 - Change detection with diffing
@@ -156,9 +171,11 @@ go get github.com/google/gopacket/pcap
 ### Components to Build
 
 #### 2.1 Physical Device Enumerator
+
 **Location**: `internal/discovery/physical/`
 
 **Files to Create**:
+
 - `enumerator.go` - Hardware enumeration orchestrator
 - `usb.go` - USB device detection
 - `pci.go` - PCIe device detection
@@ -166,15 +183,18 @@ go get github.com/google/gopacket/pcap
 - `enumerator_test.go` - Unit tests
 
 **Features**:
+
 - USB/Thunderbolt/PCIe enumeration
 - Hardware inventory via /sys/bus
 - Firmware version detection
 - Hotplug event monitoring
 
 #### 2.2 Virtual Machine Scanner
+
 **Location**: `internal/discovery/virtual/`
 
 **Files to Create**:
+
 - `vm_scanner.go` - VM scanner orchestrator
 - `libvirt.go` - libvirt integration
 - `vmware.go` - VMware vSphere integration
@@ -182,40 +202,48 @@ go get github.com/google/gopacket/pcap
 - `vm_scanner_test.go` - Unit tests
 
 **Features**:
+
 - Hypervisor detection
 - VM inventory via APIs
 - Resource allocation tracking
 - Snapshot detection
 
 **Dependencies**:
+
 ```
 go get libvirt.org/go/libvirt
 ```
 
 #### 2.3 Container Scanner
+
 **Location**: `internal/discovery/virtual/` (containers are "virtual" assets)
 
 **Files to Create**:
+
 - `container.go` - Container scanning
 - `docker.go` - Docker API integration
 - `containerd.go` - containerd integration
 - `image.go` - Image layer analysis
 
 **Features**:
+
 - Docker/Podman/containerd integration
 - Container inventory and status
 - Image vulnerability scanning (basic)
 - Network namespace mapping
 
 **Dependencies**:
+
 ```
 go get github.com/docker/docker/client
 ```
 
 #### 2.4 Attack Surface Mapper
+
 **Location**: `internal/discovery/attack_surface/`
 
 **Files to Create**:
+
 - `mapper.go` - Attack surface orchestrator
 - `port_scanner.go` - Full port scanner (0-65535)
 - `service_probe.go` - Service fingerprinting
@@ -224,6 +252,7 @@ go get github.com/docker/docker/client
 - `mapper_test.go` - Unit tests
 
 **Features**:
+
 - **FULL port scan** (0-65535, TCP & UDP)
 - Service fingerprinting
 - Banner grabbing
@@ -231,9 +260,11 @@ go get github.com/docker/docker/client
 - Detect dormant/ghost services
 
 #### 2.5 Continuous Reconciliation Engine
+
 **Location**: `internal/discovery/reconciler/`
 
 **Files to Create**:
+
 - `reconciler.go` - Reconciliation orchestrator
 - `differ.go` - State diffing algorithm
 - `scheduler.go` - Periodic re-scanning
@@ -241,6 +272,7 @@ go get github.com/docker/docker/client
 - `reconciler_test.go` - Unit tests
 
 **Features**:
+
 - Periodic re-scanning (configurable)
 - State diffing (Merkle trees)
 - Drift analysis
@@ -266,33 +298,40 @@ go get github.com/docker/docker/client
 ### Components to Build
 
 #### 3.1 Firefox Launcher
+
 **Location**: `internal/browser/firefox/`
 
 **Files to Create**:
+
 - `launcher.go` - Firefox process management
 - `profile.go` - Profile isolation
 - `sandbox.go` - Process sandboxing
 - `launcher_test.go` - Unit tests
 
 #### 3.2 Policy Enforcer
+
 **Location**: `internal/browser/policies/`
 
 **Files to Create**:
+
 - `enforcer.go` - Policy application
 - `hardening.go` - Security hardening (user.js)
 - `extensions.go` - Extension lockdown
 - `enforcer_test.go` - Unit tests
 
 #### 3.3 Browser Automation
+
 **Location**: `internal/browser/automation/`
 
 **Files to Create**:
+
 - `driver.go` - WebDriver/CDP integration
 - `capture.go` - Screenshot/HAR capture
 - `forensics.go` - Forensic logging
 - `driver_test.go` - Unit tests
 
 **Dependencies**:
+
 ```
 go get github.com/tebeka/selenium
 go get github.com/chromedp/chromedp  # For CDP
@@ -320,9 +359,11 @@ go get github.com/chromedp/chromedp  # For CDP
 ### Components to Build
 
 #### 4.1 Dashboard Skeleton
+
 **Location**: `web/src/`
 
 **Files to Create**:
+
 - `App.svelte` - Main application
 - `routes/+page.svelte` - Home dashboard
 - `routes/+layout.svelte` - Layout wrapper
@@ -332,9 +373,11 @@ go get github.com/chromedp/chromedp  # For CDP
 - `stores/alerts.ts` - Alert store
 
 #### 4.2 Core Components
+
 **Location**: `web/src/components/`
 
 **Files to Create**:
+
 - `Dashboard.svelte` - Main dashboard
 - `NetworkGraph.svelte` - Network topology visualization
 - `AlertPanel.svelte` - Alert listing
@@ -343,7 +386,9 @@ go get github.com/chromedp/chromedp  # For CDP
 - `SearchBar.svelte` - Global search
 
 #### 4.3 Visualization
+
 **Dependencies**:
+
 ```
 npm install d3
 npm install cytoscape
@@ -369,9 +414,11 @@ npm install chart.js
 ### Components to Build
 
 #### 5.1 NAS Connector
+
 **Location**: `internal/storage/nas/`
 
 **Files to Create**:
+
 - `connector.go` - NAS connection manager
 - `nfs.go` - NFS client
 - `smb.go` - SMB client
@@ -379,18 +426,22 @@ npm install chart.js
 - `connector_test.go` - Unit tests
 
 #### 5.2 Encryption Engine
+
 **Location**: `internal/storage/crypto/`
 
 **Files to Create**:
+
 - `vault.go` - Encryption/decryption
 - `keygen.go` - Key derivation (Argon2id)
 - `aes.go` - AES-256-GCM implementation
 - `vault_test.go` - Unit tests
 
 #### 5.3 Integrity Verifier
+
 **Location**: `internal/storage/integrity/`
 
 **Files to Create**:
+
 - `verifier.go` - Integrity checking
 - `merkle.go` - Merkle tree implementation
 - `audit.go` - Audit log (append-only)
@@ -416,9 +467,11 @@ npm install chart.js
 ### Components to Build
 
 #### 6.1 Stream Processor
+
 **Location**: `internal/analytics/stream/`
 
 **Files to Create**:
+
 - `processor.go` - Event stream processor
 - `buffer.go` - In-memory event buffer
 - `window.go` - Sliding window analysis
@@ -426,9 +479,11 @@ npm install chart.js
 - `processor_test.go` - Unit tests
 
 #### 6.2 Correlation Engine
+
 **Location**: `internal/analytics/correlation/`
 
 **Files to Create**:
+
 - `engine.go` - Correlation orchestrator
 - `rule_parser.go` - SIGMA rule parser
 - `matcher.go` - Pattern matching
@@ -436,14 +491,17 @@ npm install chart.js
 - `engine_test.go` - Unit tests
 
 **Dependencies**:
+
 ```
 go get github.com/bradleyjkemp/sigma-go  # SIGMA support
 ```
 
 #### 6.3 ML Anomaly Detector
+
 **Location**: `internal/analytics/ml/`
 
 **Files to Create**:
+
 - `detector.go` - Anomaly detection orchestrator
 - `statistical.go` - Statistical methods
 - `isolation_forest.go` - Isolation Forest implementation
@@ -463,6 +521,7 @@ go get github.com/bradleyjkemp/sigma-go  # SIGMA support
 ## Post-MVP (Future Phases)
 
 ### PHASE 7: Advanced Features
+
 - Distributed mode (multi-node)
 - Blockchain-based audit logs
 - Hardware acceleration (FPGA)

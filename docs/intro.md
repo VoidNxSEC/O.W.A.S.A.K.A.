@@ -1,12 +1,12 @@
 ---
 sidebar_position: 1
 slug: /
-title: O.W.A.S.A.K.A. SIEM
+title: OWASAKA SIEM
 ---
 
-# O.W.A.S.A.K.A. SIEM
+# OWASAKA SIEM
 
-<section className="docsHero" aria-label="O.W.A.S.A.K.A. documentation overview">
+<section className="docsHero" aria-label="OWASAKA documentation overview">
   <div className="docsHero__content">
     <p className="docsHero__eyebrow">Air-gapped SIEM documentation</p>
     <h2>Operational notes for building, deploying, and running O.W.A.S.A.K.A.</h2>

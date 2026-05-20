@@ -1,4 +1,4 @@
-# O.W.A.S.A.K.A. SIEM - Deployment Guide
+# OWASAKA SIEM - Deployment Guide
 
 ## Overview
 

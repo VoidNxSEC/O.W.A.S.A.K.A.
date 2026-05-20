@@ -160,11 +160,11 @@ Environment=SOPS_AGE_KEY_FILE=%d/age-key OWASAKA_SECRETS_FILE=/etc/owasaka/secre
 
 ## Threat model recap (per ADR-0059)
 
-| Threat                     | What the module does                                                   |
-|----------------------------|------------------------------------------------------------------------|
+| Threat                     | What the module does                                                    |
+| -------------------------- | ----------------------------------------------------------------------- |
 | Age key on disk            | `LoadCredential` keeps it under systemd's purview, mode 0400, unit-only |
 | Privilege escalation       | `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`  |
-| Lateral movement via creds | Credential dir is per-unit; other units cannot read                    |
+| Lateral movement via creds | Credential dir is per-unit; other units cannot read                     |
 | Supply-chain dep stealing  | Capabilities boundary set to `CAP_NET_RAW` + `CAP_NET_ADMIN` only       |
 | Insider with shell access  | Combined with sops-encrypted at-rest secrets; rotation per WORKFLOW.md  |
 
