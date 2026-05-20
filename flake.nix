@@ -362,7 +362,7 @@
           version = "0.1.0-dev";
           src = ./.;
 
-          vendorHash = "sha256-I0qk8kwP5EPNcG2xv9oprKxZxKVekuMSzhqQxD5uPcY=";
+          vendorHash = "sha256-xuDo0gyZggTNtdUdlZoLWs/7dqtebygKPVd1l7L3CAw=";
 
           # CGO dependencies (gopacket/pcap requires libpcap)
           nativeBuildInputs = [ pkgs.pkg-config ];
@@ -391,131 +391,130 @@
         # VM (~3 min on a warm cache) so it is intentionally placed under
         # checks, not packages — CI should run it on every PR that touches
         # packaging/, the nixos module, or the systemd unit.
-        checks =
-          {
-            # Sanity-build the package — `nix flake check` also exercises this
-            # implicitly via `packages.default`, but listing it here makes the
-            # intent explicit.
-            package = self.packages.${system}.default;
-          }
-          // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
-            # NixOS integration test: boot a VM with the module enabled and
-            # confirm the unit reaches active state and `/healthz` returns 200.
-            nixos-module = pkgs.testers.nixosTest {
-              name = "owasaka-nixos-module";
+        checks = {
+          # Sanity-build the package — `nix flake check` also exercises this
+          # implicitly via `packages.default`, but listing it here makes the
+          # intent explicit.
+          package = self.packages.${system}.default;
+        }
+        // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          # NixOS integration test: boot a VM with the module enabled and
+          # confirm the unit reaches active state and `/healthz` returns 200.
+          nixos-module = pkgs.testers.nixosTest {
+            name = "owasaka-nixos-module";
 
-              nodes.machine =
-                { config, pkgs, ... }:
-                {
-                  imports = [ self.nixosModules.default ];
+            nodes.machine =
+              { config, pkgs, ... }:
+              {
+                imports = [ self.nixosModules.default ];
 
-                  # Minimal config file: server on the default port 8080 and
-                  # data dir under /var/lib/oswaka (created by StateDirectory).
-                  # All optional subsystems disabled to keep the VM boot lean.
-                  environment.etc."oswaka/config.yaml".text = ''
-                    server:
-                      host: "127.0.0.1"
-                      port: 8080
-                      websocket:
-                        enabled: true
-                        path: "/ws"
-                        max_connections: 100
-                      tls:
-                        enabled: false
+                # Minimal config file: server on the default port 8080 and
+                # data dir under /var/lib/oswaka (created by StateDirectory).
+                # All optional subsystems disabled to keep the VM boot lean.
+                environment.etc."oswaka/config.yaml".text = ''
+                  server:
+                    host: "127.0.0.1"
+                    port: 8080
+                    websocket:
+                      enabled: true
+                      path: "/ws"
+                      max_connections: 100
+                    tls:
+                      enabled: false
 
-                    logging:
-                      level: "info"
-                      format: "json"
-                      output: "stdout"
+                  logging:
+                    level: "info"
+                    format: "json"
+                    output: "stdout"
 
-                    network:
-                      dns:
-                        enabled: false
-                      proxy:
-                        enabled: false
-                      discovery:
-                        enabled: false
-                      topology:
-                        enabled: false
-
+                  network:
+                    dns:
+                      enabled: false
+                    proxy:
+                      enabled: false
                     discovery:
-                      physical:
-                        enabled: false
-                      virtual:
-                        enabled: false
-                      containers:
-                        enabled: false
-                      attack_surface:
-                        enabled: false
-                      reconciliation:
-                        enabled: false
-
-                    browser:
+                      enabled: false
+                    topology:
                       enabled: false
 
-                    storage:
-                      nas:
-                        enabled: false
-                      encryption:
-                        enabled: false
-                      integrity:
-                        enabled: false
-                      local:
-                        data_dir: "/var/lib/owasaka"
-                        max_size_gb: 1
-                        cleanup_policy: "oldest_first"
-
-                    analytics:
-                      stream:
-                        enabled: false
-                      correlation:
-                        enabled: false
-                      ml:
-                        enabled: false
-
-                    alerts:
+                  discovery:
+                    physical:
+                      enabled: false
+                    virtual:
+                      enabled: false
+                    containers:
+                      enabled: false
+                    attack_surface:
+                      enabled: false
+                    reconciliation:
                       enabled: false
 
-                    performance:
-                      max_memory_mb: 512
-                      max_cpu_percent: 50
-                      max_concurrent_scans: 5
-                      event_queue_size: 1000
+                  browser:
+                    enabled: false
 
-                    metrics:
+                  storage:
+                    nas:
+                      enabled: false
+                    encryption:
+                      enabled: false
+                    integrity:
+                      enabled: false
+                    local:
+                      data_dir: "/var/lib/owasaka"
+                      max_size_gb: 1
+                      cleanup_policy: "oldest_first"
+
+                  analytics:
+                    stream:
+                      enabled: false
+                    correlation:
+                      enabled: false
+                    ml:
                       enabled: false
 
-                    debug:
+                  alerts:
+                    enabled: false
+
+                  performance:
+                    max_memory_mb: 512
+                    max_cpu_percent: 50
+                    max_concurrent_scans: 5
+                    event_queue_size: 1000
+
+                  metrics:
+                    enabled: false
+
+                  debug:
+                    enabled: false
+
+                  security:
+                    api_auth:
+                      enabled: false
+                    rate_limiting:
+                      enabled: true
+                      requests_per_second: 100
+                      burst: 200
+                    rbac:
                       enabled: false
 
-                    security:
-                      api_auth:
-                        enabled: false
-                      rate_limiting:
-                        enabled: true
-                        requests_per_second: 100
-                        burst: 200
-                      rbac:
-                        enabled: false
+                  nats_url: ""
+                '';
 
-                    nats_url: ""
-                  '';
-
-                  services.owasaka = {
-                    enable = true;
-                    configFile = "/etc/oswaka/config.yaml";
-                    apiPort = 8080;
-                  };
+                services.owasaka = {
+                  enable = true;
+                  configFile = "/etc/oswaka/config.yaml";
+                  apiPort = 8080;
                 };
+              };
 
-              testScript = ''
-                start_all()
-                machine.wait_for_unit("oswaka.service")
-                machine.wait_for_open_port(8080)
-                machine.succeed("curl -fsS http://localhost:8080/healthz")
-              '';
-            };
+            testScript = ''
+              start_all()
+              machine.wait_for_unit("oswaka.service")
+              machine.wait_for_open_port(8080)
+              machine.succeed("curl -fsS http://localhost:8080/healthz")
+            '';
           };
+        };
 
         formatter = pkgs.nixfmt-rfc-style;
       }

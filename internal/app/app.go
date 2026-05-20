@@ -308,6 +308,45 @@ func (a *App) Run() error {
 	})
 	pipeline.SetTopologyMapper(topoBuilder)
 
+	// ── Neotron Compliance Event Ingestion ─────────────────────────────
+	// Subscribe to neotron compliance events published on NATS subjects:
+	//   neotron.compliance.temporal.v1   — Layer 0 TEMPORAL (boiling frog)
+	//   neotron.compliance.sentinel.v1   — Layer 1 SENTINEL guardrails
+	//   neotron.compliance.bastion.v1    — Layer 2 BASTION seccomp-BPF
+	//   neotron.cortex.consensus.v1      — Layer 3 CORTEX swarm consensus
+	//   neotron.compliance.violation.v1  — Blocking violations (any layer)
+	//
+	// The subscriber pushes each event through owasaka's SIEM pipeline
+	// for persistence (BoltDB), WebSocket broadcast (M3 Command Center),
+	// Ed25519 signing (ADR-0062), transparency Merkle logging (ADR-0063),
+	// correlation analysis, and ML anomaly detection.
+	var neotronSub *events.NeotronComplianceSubscriber
+	if pub != nil && pub.IsConnected() {
+		nc := pub.RawConn()
+		if nc != nil {
+			var err error
+			neotronSub, err = events.NewNeotronComplianceSubscriber(nc, pipeline, a.logger)
+			if err != nil {
+				a.logger.Warnw("Failed to subscribe to neotron compliance events",
+					"error", err)
+			} else {
+				a.logger.Infow("Neotron compliance subscriber active",
+					"subjects", "neotron.compliance.>")
+			}
+		}
+	}
+
+	// Health probe for neotron compliance ingestion channel
+	healthRegistry.Register(health.NewStaticProbe("neotron-compliance", false, func() health.Result {
+		if !natsConfigured || pub == nil || !pub.IsConnected() {
+			return health.Result{Status: health.StatusHealthy, Message: "disabled (no NATS)"}
+		}
+		if neotronSub == nil {
+			return health.Result{Status: health.StatusDegraded, Message: "subscription failed"}
+		}
+		return health.Result{Status: health.StatusHealthy}
+	}))
+
 	// Health probes (unprotected — these are scraped by orchestrators
 	// before any auth machinery is available).
 	apiServer.RegisterHandler("/healthz", api.Instrument("/healthz", health.LivenessHandler(healthRegistry).ServeHTTP))

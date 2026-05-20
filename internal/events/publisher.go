@@ -99,6 +99,17 @@ func (p *Publisher) IsConnected() bool {
 	return p.nc.IsConnected()
 }
 
+// RawConn returns the underlying NATS connection for direct operations
+// such as subscribing to subjects (used by the neotron compliance
+// event subscriber). Returns nil if the publisher is nil or was never
+// connected.
+func (p *Publisher) RawConn() *nats.Conn {
+	if p == nil {
+		return nil
+	}
+	return p.nc
+}
+
 // Status returns a human-readable status string for the NATS
 // connection. Returns "disabled" for nil Publishers so health probes
 // can distinguish "operator disabled NATS" from "NATS broken".

@@ -48,11 +48,11 @@ func (e *Engine) Analyze(event models.NetworkEvent) {
 	if !e.cfg.Enabled || event.Type == models.EventAlert {
 		return
 	}
-	
+
 	for _, rule := range e.rules {
 		if alert := rule.Evaluate(event); alert != nil {
-			e.logger.Errorw("⚠️  THREAT DETECTED IN PIPELINE  ⚠️", 
-				"rule", rule.Name(), 
+			e.logger.Errorw("⚠️  THREAT DETECTED IN PIPELINE  ⚠️",
+				"rule", rule.Name(),
 				"trigger_event", event.ID,
 			)
 			if e.onAlert != nil {

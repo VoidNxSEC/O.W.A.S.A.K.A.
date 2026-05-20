@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/api"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/metrics"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/models"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/db"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/pkg/logging"
@@ -155,9 +156,15 @@ func (p *Pipeline) PushNetworkEvent(e models.NetworkEvent) {
 		e.Timestamp = time.Now()
 	}
 
+	// Top-line throughput counter — labelled by event type so a sudden
+	// drop in a specific source is visible at a glance.
+	metrics.PipelineEventsTotal.WithLabelValues(string(e.Type)).Inc()
+
 	// 1b. Normalize and enrich with sliding-window context
 	if p.stream != nil {
+		start := time.Now()
 		e = p.stream.Enrich(e)
+		metrics.PipelineStageDuration.WithLabelValues("enrich").Observe(time.Since(start).Seconds())
 	}
 
 	// 1c. Sign the event (ADR-0062). Signature is computed over the
@@ -167,9 +174,12 @@ func (p *Pipeline) PushNetworkEvent(e models.NetworkEvent) {
 	// unsigned event, surfacing the breakage at the consumer rather
 	// than dropping the event silently.
 	if p.signer != nil {
+		start := time.Now()
 		if err := p.signer.Sign(context.Background(), &e); err != nil {
 			p.logger.Errorw("Failed to sign event", "error", err, "event_id", e.ID)
+			metrics.PipelinePublishFailuresTotal.WithLabelValues("sign_failed").Inc()
 		}
+		metrics.PipelineStageDuration.WithLabelValues("sign").Observe(time.Since(start).Seconds())
 	}
 
 	// 1d. Append to transparency log if the event is critical (ADR-0063).
@@ -180,19 +190,25 @@ func (p *Pipeline) PushNetworkEvent(e models.NetworkEvent) {
 		canonical, err := e.CanonicalBytes()
 		if err != nil {
 			p.logger.Errorw("Failed to canonicalize event for transparency log", "error", err, "event_id", e.ID)
+			metrics.PipelinePublishFailuresTotal.WithLabelValues("marshal_failed").Inc()
 		} else {
 			kind := transparencyKind(e.Type)
+			start := time.Now()
 			if err := p.transparency.Append(context.Background(), []byte(kind), canonical, e.Timestamp); err != nil {
 				p.logger.Errorw("Failed to append to transparency log", "error", err, "event_id", e.ID)
+				metrics.PipelinePublishFailuresTotal.WithLabelValues("transparency_failed").Inc()
 			}
+			metrics.PipelineStageDuration.WithLabelValues("transparency_append").Observe(time.Since(start).Seconds())
 		}
 	}
 
 	// 2. Persist cleanly to disk locally via BoltDB
 	if p.repo != nil {
+		start := time.Now()
 		if err := p.repo.LogEvent(&e); err != nil {
 			p.logger.Errorw("Failed to flush event to storage", "error", err, "event_id", e.ID)
 		}
+		metrics.PipelineStageDuration.WithLabelValues("persist").Observe(time.Since(start).Seconds())
 	}
 
 	// 3. Forward JSON straight to Svelte Web UI socket
@@ -217,7 +233,11 @@ func (p *Pipeline) PushNetworkEvent(e models.NetworkEvent) {
 		out.Payload["source"] = e.Source
 		out.Payload["destination"] = e.Destination
 
-		p.pub.Publish(spectreNetworkSubject(e.Type), out)
+		start := time.Now()
+		if err := p.pub.Publish(spectreNetworkSubject(e.Type), out); err != nil {
+			metrics.PipelinePublishFailuresTotal.WithLabelValues("nats_disconnected").Inc()
+		}
+		metrics.PipelineStageDuration.WithLabelValues("nats_publish").Observe(time.Since(start).Seconds())
 	}
 
 	// 5. Feed topology mapper to track source/destination connections
@@ -227,7 +247,11 @@ func (p *Pipeline) PushNetworkEvent(e models.NetworkEvent) {
 
 	// 6. Fire un-blocking analysis asynchronously against the Threat module
 	if p.engine != nil && e.Type != models.EventAlert {
-		go p.engine.Analyze(e)
+		go func(ev models.NetworkEvent) {
+			start := time.Now()
+			p.engine.Analyze(ev)
+			metrics.PipelineStageDuration.WithLabelValues("correlate").Observe(time.Since(start).Seconds())
+		}(e)
 	}
 
 	// 7. Feed passive observers (ML anomaly detection)

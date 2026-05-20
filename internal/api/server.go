@@ -137,7 +137,7 @@ func (s *Server) Start(ctx context.Context) error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
 	s.httpServer = &http.Server{
 		Addr:              addr,
-		Handler:           hstsMiddleware(s.mux),
+		Handler:           observabilityMiddleware(hstsMiddleware(s.mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
