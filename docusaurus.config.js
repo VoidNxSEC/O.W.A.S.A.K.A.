@@ -1,37 +1,37 @@
 // @ts-check
 
 const config = {
-  title: 'O.W.A.S.A.K.A. SIEM',
-  tagline: 'Open Watchful Air-gapped Security Analysis Kit & Architecture',
-  url: process.env.SITE_URL ?? 'https://voidnxsec.github.io',
-  baseUrl: process.env.BASE_URL ?? '/O.W.A.S.A.K.A./',
-  organizationName: 'VoidNxSEC',
-  projectName: 'O.W.A.S.A.K.A.',
-  deploymentBranch: 'gh-pages',
+  title: "OWASAKA SIEM",
+  tagline: "Open Watchful Air-gapped Security Analysis Kit & Architecture",
+  url: process.env.SITE_URL ?? "https://voidnxsec.github.io",
+  baseUrl: process.env.BASE_URL ?? "/",
+  organizationName: "VoidNxSEC",
+  projectName: "O.W.A.S.A.K.A.",
+  deploymentBranch: "gh-pages",
   trailingSlash: false,
-  onBrokenLinks: 'warn',
+  onBrokenLinks: "warn",
   markdown: {
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownLinks: "warn",
     },
   },
 
   i18n: {
-    defaultLocale: 'en',
-    locales: ['en'],
+    defaultLocale: "en",
+    locales: ["en"],
   },
 
   presets: [
     [
-      'classic',
+      "classic",
       {
         docs: {
-          routeBasePath: '/',
-          sidebarPath: require.resolve('./sidebars.js'),
+          routeBasePath: "/",
+          sidebarPath: require.resolve("./sidebars.js"),
         },
         blog: false,
         theme: {
-          customCss: require.resolve('./src/css/custom.css'),
+          customCss: require.resolve("./src/css/custom.css"),
         },
       },
     ],
@@ -39,47 +39,47 @@ const config = {
 
   themeConfig: {
     navbar: {
-      title: 'O.W.A.S.A.K.A.',
+      title: "O.W.A.S.A.K.A.",
       items: [
         {
-          type: 'docSidebar',
-          sidebarId: 'docs',
-          position: 'left',
-          label: 'Docs',
+          type: "docSidebar",
+          sidebarId: "docs",
+          position: "left",
+          label: "Docs",
         },
         {
-          href: 'https://github.com/VoidNxSEC/O.W.A.S.A.K.A.',
-          label: 'GitHub',
-          position: 'right',
+          href: "https://github.com/VoidNxSEC/O.W.A.S.A.K.A.",
+          label: "GitHub",
+          position: "right",
         },
       ],
     },
     footer: {
-      style: 'dark',
+      style: "dark",
       links: [
         {
-          title: 'Docs',
+          title: "Docs",
           items: [
             {
-              label: 'Architecture',
-              to: '/architecture/OVERVIEW',
+              label: "Architecture",
+              to: "/architecture/OVERVIEW",
             },
             {
-              label: 'Deployment',
-              to: '/deployment',
+              label: "Deployment",
+              to: "/deployment",
             },
             {
-              label: 'Runbooks',
-              to: '/runbooks/INCIDENT',
+              label: "Runbooks",
+              to: "/runbooks/INCIDENT",
             },
           ],
         },
         {
-          title: 'Project',
+          title: "Project",
           items: [
             {
-              label: 'Repository',
-              href: 'https://github.com/VoidNxSEC/O.W.A.S.A.K.A.',
+              label: "Repository",
+              href: "https://github.com/VoidNxSEC/O.W.A.S.A.K.A.",
             },
           ],
         },
@@ -87,7 +87,7 @@ const config = {
       copyright: `Copyright © ${new Date().getFullYear()} O.W.A.S.A.K.A. SIEM.`,
     },
     prism: {
-      additionalLanguages: ['bash', 'go', 'json', 'yaml'],
+      additionalLanguages: ["bash", "go", "json", "yaml"],
     },
   },
 };
