@@ -1,6 +1,6 @@
 [Unit]
 Description=O.W.A.S.A.K.A. SIEM — Air-gapped Security Monitoring Platform
-Documentation=https://github.com/marcosfpina/O.W.A.S.A.K.A
+Documentation=https://github.com/VoidNxSEC/O.W.A.S.A.K.A
 After=network-online.target
 Wants=network-online.target
 
