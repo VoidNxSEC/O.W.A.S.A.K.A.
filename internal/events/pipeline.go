@@ -65,7 +65,18 @@ type Pipeline struct {
 // (RBAC reload, identity store), not via the pipeline, and are
 // appended at those call sites.
 func isCriticalEvent(e models.NetworkEvent) bool {
-	return e.Type == models.EventAlert
+	if e.Type == models.EventAlert {
+		return true
+	}
+	// Compliance violations with severity block/critical/high also enter transparency log
+	if e.Type == models.EventCompliance {
+		sev, _ := e.Metadata["compliance_severity"].(string)
+		passed, _ := e.Metadata["compliance_passed"].(bool)
+		if !passed && (sev == "block" || sev == "critical" || sev == "high") {
+			return true
+		}
+	}
+	return false
 }
 
 // transparencyKind maps a NetworkEvent type onto the LeafKind tag the
@@ -76,6 +87,8 @@ func transparencyKind(t models.EventType) string {
 	switch t {
 	case models.EventAlert:
 		return "alert.high"
+	case models.EventCompliance:
+		return "compliance.violation"
 	default:
 		return "event." + string(t)
 	}
@@ -89,6 +102,8 @@ func spectreNetworkSubject(eventType models.EventType) string {
 		return "network.service.detected.v1"
 	case models.EventAlert:
 		return "network.dns.threat.v1"
+	case models.EventCompliance:
+		return "neotron.compliance.siem.v1"
 	case models.EventARP, models.EventPhysical, models.EventVM:
 		return "network.asset.discovered.v1"
 	default:

@@ -11,32 +11,48 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// ── Neotron Compliance Event Schema ─────────────────────────────────────────
+// ── Neotron Compliance Event Integration ────────────────────────────────────
 //
-// The neotron platform publishes compliance events as JSON on subjects:
-//   neotron.compliance.temporal.v1    — Layer 0 temporal guard verdicts (NEW)
-//   neotron.compliance.sentinel.v1    — Layer 1 SENTINEL guardrail results
+// The neotron platform (Python) publishes compliance events as JSON on NATS:
+//
+//   neotron.compliance.temporal.v1    — Layer 0 TEMPORAL guard (boiling-frog)
+//   neotron.compliance.sentinel.v1    — Layer 1 SENTINEL guardrails (LGPD/GDPR)
 //   neotron.compliance.bastion.v1     — Layer 2 BASTION kernel enforcement
-//   neotron.cortex.consensus.v1       — Layer 3 CORTEX swarm decisions
-//   neotron.compliance.violation.v1   — All blocking violations
+//   neotron.cortex.consensus.v1       — Layer 3 CORTEX swarm consensus
+//   neotron.compliance.violation.v1   — Blocking violations (any layer)
+//   neotron.compliance.siem.v1        — SIEM export bridge
 //
-// Each event payload looks like:
+// Event payload (JSON):
 //
-//	{
-//	  "audit_id": 42,
-//	  "timestamp": "2026-04-07T12:00:00Z",
-//	  "source": "neotron",
-//	  "guardrail_name": "temporal_guard",
-//	  "regulation": "LAYER_0_TEMPORAL",
-//	  "agent_id": "user_analyst_42",
-//	  "passed": true,
-//	  "reputation": 0.85,
-//	  "risk_score": 0.12,
-//	  "severity": "audit",
-//	  "subject": "neotron.compliance.temporal.v1"
-//	}
+//   {
+//     "audit_id": 42,
+//     "timestamp": "2026-04-07T12:00:00Z",
+//     "source": "neotron",
+//     "subject": "neotron.compliance.sentinel.v1",
+//     "guardrail_name": "lgpd_art18_explanation",
+//     "regulation": "LGPD",
+//     "severity": "block",         // debug|info|low|medium|high|critical|block
+//     "passed": false,
+//     "confidence": 0.98,
+//     "agent_output_hash": "sha256:abc123...",
+//     "details": "Explanation missing for automated decision"
+//   }
+//
+// Severity mapping (Neotron → Owasaka):
+//
+//   Neotron severity    passed    Owasaka EventType    Transparency log
+//   ─────────────────   ──────    ─────────────────    ────────────────
+//   block/critical      false     EventAlert           ✅ (ADR-0063)
+//   high                false     EventAlert           ✅
+//   medium/low/info     false     EventCompliance      ❌
+//   any                 true      EventCompliance      ❌
+//
+// All events carry compliance metadata (severity, regulation, guardrail)
+// for downstream correlation and ML anomaly detection.
 
-// NeotronComplianceSubscriber listens on neotron.compliance.* NATS subjects
+// ── Subscriber ──────────────────────────────────────────────────────────────
+
+// NeotronComplianceSubscriber listens on neotron.compliance.> NATS subjects
 // and pushes inbound events into the owasaka SIEM pipeline for persistence,
 // WebSocket broadcast, correlation, and ML anomaly detection.
 type NeotronComplianceSubscriber struct {
@@ -47,10 +63,6 @@ type NeotronComplianceSubscriber struct {
 
 // NewNeotronComplianceSubscriber creates subscriptions for all neotron
 // compliance subjects and wires them into the owasaka event pipeline.
-//
-// The subscriber uses the nc.RawConn to subscribe so we bypass the
-// Publisher wrapper (which only handles publishing) and subscribe
-// directly to the underlying nats.Conn.
 func NewNeotronComplianceSubscriber(nc *nats.Conn, pipeline *Pipeline, logger *logging.Logger) (*NeotronComplianceSubscriber, error) {
 	sub := &NeotronComplianceSubscriber{
 		pipeline: pipeline,
@@ -58,20 +70,16 @@ func NewNeotronComplianceSubscriber(nc *nats.Conn, pipeline *Pipeline, logger *l
 	}
 
 	// Subscribe to all neotron compliance subjects using wildcard
-	subjects := []string{
-		"neotron.compliance.>",
-	}
+	subject := "neotron.compliance.>"
 
-	for _, subject := range subjects {
-		natsSub, err := nc.Subscribe(subject, func(msg *nats.Msg) {
-			sub.handleComplianceEvent(msg)
-		})
-		if err != nil {
-			return nil, fmt.Errorf("subscribe %s: %w", subject, err)
-		}
-		sub.subs = append(sub.subs, natsSub)
-		logger.Infow("Neotron compliance subscriber registered", "subject", subject)
+	natsSub, err := nc.Subscribe(subject, func(msg *nats.Msg) {
+		sub.handleComplianceEvent(msg)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("subscribe %s: %w", subject, err)
 	}
+	sub.subs = append(sub.subs, natsSub)
+	logger.Infow("Neotron compliance subscriber registered", "subject", subject)
 
 	return sub, nil
 }
@@ -90,12 +98,27 @@ func (s *NeotronComplianceSubscriber) handleComplianceEvent(msg *nats.Msg) {
 		return
 	}
 
-	s.logger.Infow("Neotron compliance event received",
+	// Extract key fields for structured logging
+	auditID, _ := raw["audit_id"].(float64)
+	guardrail, _ := raw["guardrail_name"].(string)
+	passed, _ := raw["passed"].(bool)
+	severity, _ := raw["severity"].(string)
+	regulation, _ := raw["regulation"].(string)
+
+	logFields := []any{
 		"subject", msg.Subject,
-		"audit_id", raw["audit_id"],
-		"guardrail", raw["guardrail_name"],
-		"passed", raw["passed"],
-	)
+		"audit_id", int(auditID),
+		"guardrail", guardrail,
+		"regulation", regulation,
+		"severity", severity,
+		"passed", passed,
+	}
+
+	if !passed {
+		s.logger.Warnw("Neotron compliance VIOLATION", logFields...)
+	} else {
+		s.logger.Infow("Neotron compliance event", logFields...)
+	}
 
 	// Convert to owasaka NetworkEvent for pipeline ingestion
 	event := s.convertToNetworkEvent(msg.Subject, raw)
@@ -106,75 +129,130 @@ func (s *NeotronComplianceSubscriber) handleComplianceEvent(msg *nats.Msg) {
 	// 3. Sign with Ed25519 (ADR-0062)
 	// 4. Feed correlation engine
 	// 5. ML anomaly detection
-	// 6. Transparency log for critical events (ADR-0063)
+	// 6. Transparency log for violations (ADR-0063)
 	s.pipeline.PushNetworkEvent(event)
 }
 
 // convertToNetworkEvent maps a neotron compliance event to the owasaka
 // NetworkEvent model for pipeline processing.
 func (s *NeotronComplianceSubscriber) convertToNetworkEvent(subject string, raw map[string]any) models.NetworkEvent {
-	// Determine event type based on the subject
-	eventType := s.subjectToEventType(subject)
+	// Determine event type based on severity and pass/fail
+	eventType := s.determineEventType(subject, raw)
 
 	// Extract timestamp — neotron uses ISO 8601 strings
 	ts := time.Now()
-	if t, ok := raw["timestamp"].(string); ok {
-		parsed, err := time.Parse(time.RFC3339, t)
+	if tsStr, ok := raw["timestamp"].(string); ok {
+		parsed, err := time.Parse(time.RFC3339, tsStr)
 		if err == nil {
 			ts = parsed
 		}
 	}
 
-	// Extract agent_id or use a fallback
-	agentID := "unknown"
-	if a, ok := raw["agent_id"].(string); ok {
-		agentID = a
+	// Extract agent/guardrail identity
+	guardrail, _ := raw["guardrail_name"].(string)
+	regulation, _ := raw["regulation"].(string)
+	severity, _ := raw["severity"].(string)
+	passed, _ := raw["passed"].(bool)
+	auditID, _ := raw["audit_id"].(float64)
+
+	// Build enriched metadata — compliance-specific fields at top level
+	// for correlation engine and ML feature extraction
+	metadata := make(map[string]any)
+
+	// ── Compliance-first fields (queried by correlation/ML) ──
+	metadata["compliance_guardrail"] = guardrail
+	metadata["compliance_regulation"] = regulation
+	metadata["compliance_severity"] = severity
+	metadata["compliance_passed"] = passed
+	metadata["compliance_audit_id"] = int(auditID)
+	metadata["nats_subject"] = subject
+	metadata["source_service"] = "neotron"
+
+	// Confidence score (for ML anomaly detection)
+	if conf, ok := raw["confidence"].(float64); ok {
+		metadata["compliance_confidence"] = conf
 	}
 
-	// Build metadata from all raw fields
-	metadata := make(map[string]any)
-	for k, v := range raw {
-		metadata[k] = v
+	// Risk score (Temporal guard specific)
+	if risk, ok := raw["risk_score"].(float64); ok {
+		metadata["compliance_risk_score"] = risk
 	}
-	// Add the original NATS subject
-	metadata["nats_subject"] = subject
-	// Add source service tag
-	metadata["source_service"] = "neotron"
+
+	// Agent reputation (Temporal guard specific)
+	if rep, ok := raw["reputation"].(float64); ok {
+		metadata["compliance_reputation"] = rep
+	}
+
+	// Agent ID
+	if agentID, ok := raw["agent_id"].(string); ok {
+		metadata["agent_id"] = agentID
+	}
+
+	// Output hash (for audit trail linking)
+	if hash, ok := raw["agent_output_hash"].(string); ok {
+		metadata["output_hash"] = hash
+	}
+
+	// Details / explanation
+	if details, ok := raw["details"].(string); ok {
+		metadata["details"] = details
+	}
+
+	// Copy all remaining raw fields not already captured
+	for k, v := range raw {
+		switch k {
+		case "guardrail_name", "regulation", "severity", "passed",
+			"audit_id", "timestamp", "confidence", "risk_score",
+			"reputation", "agent_id", "agent_output_hash", "details",
+			"subject", "source":
+			// already handled above
+		default:
+			metadata[k] = v
+		}
+	}
 
 	return models.NetworkEvent{
 		ID:          uuid.New().String(),
 		Type:        eventType,
 		Source:      "neotron",
-		Destination: agentID,
+		Destination: guardrail, // guardrail name as destination for routing
 		Metadata:    metadata,
 		Timestamp:   ts,
 	}
 }
 
-// subjectToEventType maps NATS subjects to owasaka EventTypes for proper
-// routing through the SIEM pipeline (correlation, alerts, etc.).
-func (s *NeotronComplianceSubscriber) subjectToEventType(subject string) models.EventType {
-	switch subject {
-	case "neotron.compliance.violation.v1":
-		// Violations are high-severity — map to THREAT_ALERT for alerting
+// determineEventType maps a neotron compliance event to an owasaka EventType.
+//
+// Decision matrix:
+//
+//   severity     | passed  → EventType
+//   ──────────── | ──────    ─────────
+//   block        | false  → EventAlert (critical — transparency log)
+//   critical     | false  → EventAlert
+//   high         | false  → EventAlert
+//   medium       | false  → EventCompliance
+//   low/info     | false  → EventCompliance
+//   any          | true   → EventCompliance
+func (s *NeotronComplianceSubscriber) determineEventType(subject string, raw map[string]any) models.EventType {
+	severity, _ := raw["severity"].(string)
+	passed, _ := raw["passed"].(bool)
+
+	// Explicit violation subject always maps to alert
+	if subject == "neotron.compliance.violation.v1" {
 		return models.EventAlert
-	case "neotron.compliance.temporal.v1":
-		// Temporal guard verdicts — treat as DNS-like events for now
-		// (will be enriched by correlation engine)
-		return models.EventDNS
-	case "neotron.compliance.sentinel.v1":
-		return models.EventDNS
-	case "neotron.compliance.bastion.v1":
-		return models.EventPortScan
-	case "neotron.cortex.consensus.v1":
-		return models.EventDNS
+	}
+
+	// If the event passed, it's a routine compliance check → EventCompliance
+	if passed {
+		return models.EventCompliance
+	}
+
+	// Failed events: severity determines alert level
+	switch severity {
+	case "block", "critical", "high":
+		return models.EventAlert
 	default:
-		// Graceful fallback for unknown subjects
-		if subject == "" {
-			return models.EventDNS
-		}
-		// Check for violation pattern in unknown subjects
-		return models.EventDNS
+		return models.EventCompliance
 	}
 }
 
