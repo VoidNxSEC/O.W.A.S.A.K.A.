@@ -1,25 +1,15 @@
 {
-  "name": "owasaka-docs",
+  "name": "owasaka",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@11.1.1",
+  "packageManager": "pnpm@11.1.2",
   "scripts": {
-    "start": "docusaurus start",
-    "build": "docusaurus build",
-    "serve": "docusaurus serve",
-    "clear": "docusaurus clear",
-    "deploy:cloudflare": "wrangler pages deploy build"
-  },
-  "dependencies": {
-    "@docusaurus/core": "3.10.1",
-    "@docusaurus/preset-classic": "3.10.1",
-    "@mdx-js/react": "^3.1.1",
-    "clsx": "^2.1.1",
-    "prism-react-renderer": "^2.4.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "engines": {
-    "node": ">=20.0"
+    "react:dev": "pnpm --filter @owasaka/react-frontend dev",
+    "react:build": "pnpm --filter @owasaka/react-frontend build",
+    "react:typecheck": "pnpm --filter @owasaka/react-frontend typecheck",
+    "svelte:dev": "pnpm --filter web dev",
+    "svelte:build": "pnpm --filter web build",
+    "svelte:check": "pnpm --filter web check",
+    "frontend:build": "pnpm react:typecheck && pnpm react:build && pnpm svelte:check && pnpm svelte:build"
   }
 }

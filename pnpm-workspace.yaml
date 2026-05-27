@@ -1,2 +1,7 @@
+packages:
+  - web
+  - frontend/react
+
 allowBuilds:
   core-js: true
+  esbuild: true

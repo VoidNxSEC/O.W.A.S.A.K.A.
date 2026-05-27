@@ -125,11 +125,11 @@ O.W.A.S.A.K.A./
 ├── configs/               # Configuration files
 │   ├── examples/         # Example configurations
 │   └── policies/         # Security policies
-└── docs/                  # Documentation
-    ├── architecture/     # Design docs
-    ├── api/             # API documentation
-    └── deployment/      # Deployment guides
+└── frontend/              # React frontend experiments
+    └── react/            # Vite + React console
 ```
+
+Documentation now lives in the sibling repository at `../owasaka-docs`.
 
 ---
 
@@ -140,7 +140,7 @@ O.W.A.S.A.K.A./
 **Option 1: Nix Flakes (Recommended for Development)**
 - **Nix with Flakes** - Reproducible development environment
 - All dependencies managed automatically
-- See [Nix Development Guide](docs/development/NIX_GUIDE.md)
+- See the Nix Development Guide in `../owasaka-docs/docs/development/NIX_GUIDE.md`
 
 **Option 2: Manual Installation**
 - **Go 1.22+** (tested on 1.24.7)
@@ -185,7 +185,7 @@ oswaka-dev help
 - Development utilities: jq, ripgrep, bat, htop
 - Custom scripts and aliases
 
-See the [complete Nix guide](docs/development/NIX_GUIDE.md) for advanced usage.
+See the complete Nix guide in `../owasaka-docs/docs/development/NIX_GUIDE.md` for advanced usage.
 
 ### Installation (Manual)
 
@@ -390,7 +390,7 @@ Every module above is initialized, started, and connected to the central event p
 This is a personal security infrastructure project. If you're interested in similar work:
 
 1. Fork the repository
-2. Study the architecture in `/docs/architecture`
+2. Study the architecture in `../owasaka-docs/docs/architecture`
 3. Build your own variant
 4. Share learnings (not code) back
 

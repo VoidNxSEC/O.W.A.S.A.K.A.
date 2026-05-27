@@ -185,9 +185,9 @@
             delve                     - Debugger
 
           Documentation:
-            docs/architecture/        - System architecture
-            docs/api/                 - API documentation
-            docs/deployment/          - Deployment guides
+            ../owasaka-docs/docs/architecture/ - System architecture
+            ../owasaka-docs/docs/api/          - API documentation
+            ../owasaka-docs/docs/deployment/   - Deployment guides
 
           Current Phase: PHASE 0 ✅ → PHASE 1 (Network Intelligence)
 
@@ -600,7 +600,7 @@
               description = ''
                 Path to the sops-encrypted `secrets.yaml`. When non-null the
                 application reads it at startup and decrypts using the age
-                key provided by `ageKeyFile`. See `docs/secrets/BOOTSTRAP.md`.
+                key provided by `ageKeyFile`. See `../owasaka-docs/docs/secrets/BOOTSTRAP.md`.
               '';
             };
 
