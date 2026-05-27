@@ -28,7 +28,7 @@ go.work.sum
 .env.local
 .env.*.local
 
-# Secrets (see ADR-0059 §"Secrets management" and docs/secrets/BOOTSTRAP.md)
+# Secrets (see ADR-0059 and ../owasaka-docs/docs/secrets/BOOTSTRAP.md)
 # - secrets.yaml is the encrypted file, committed as-is (sops-encrypted)
 # - secrets.dec.yaml is the decrypted form, NEVER commit
 # - .sops/age/ holds private keys, NEVER commit
