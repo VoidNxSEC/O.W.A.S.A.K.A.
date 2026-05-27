@@ -11,7 +11,7 @@ import (
 
 // TestShippedBaselinePolicy guarantees the configs/rbac/roles.yaml that
 // ships with the binary parses cleanly and grants the expected
-// permissions to each baseline role. Drift between the docs/ADR and
+// permissions to each baseline role. Drift between the docs repo and
 // the YAML breaks here.
 func TestShippedBaselinePolicy(t *testing.T) {
 	path := shippedRolesPath(t)

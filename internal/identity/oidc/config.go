@@ -19,7 +19,7 @@ import (
 )
 
 // Config carries OIDC client configuration. Sourced from
-// sops-encrypted secrets at runtime (see docs/secrets/BOOTSTRAP.md).
+// sops-encrypted secrets at runtime (see ../owasaka-docs/docs/secrets/BOOTSTRAP.md).
 //
 // A zero-value Config disables OIDC; the constructor refuses to
 // build a Client without Enabled=true.

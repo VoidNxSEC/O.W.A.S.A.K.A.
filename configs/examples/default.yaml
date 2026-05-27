@@ -207,7 +207,7 @@ storage:
   # Encrypted hot-backup engine. Recipients are age public keys
   # (`age-keygen` output). identities_file is the matching private
   # key file used by `oswaka restore` and the admin endpoint.
-  # See docs/auth/BACKUP.md for the full operator workflow.
+  # See ../owasaka-docs/docs/auth/BACKUP.md for the full operator workflow.
   backup:
     recipients: []
     # Example:

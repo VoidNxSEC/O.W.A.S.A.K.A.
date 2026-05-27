@@ -120,6 +120,19 @@ func hstsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Start opens the main port listeners. If cfg.TLS.Enabled is true,
 // the listener uses TLS 1.3 minimum with a conservative cipher list
 // and serves HTTPS only — there is no automatic plaintext-to-TLS
@@ -137,7 +150,7 @@ func (s *Server) Start(ctx context.Context) error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
 	s.httpServer = &http.Server{
 		Addr:              addr,
-		Handler:           observabilityMiddleware(hstsMiddleware(s.mux)),
+		Handler:           observabilityMiddleware(corsMiddleware(hstsMiddleware(s.mux))),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

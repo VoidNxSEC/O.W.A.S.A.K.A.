@@ -333,7 +333,7 @@ func writeTempPolicy(t *testing.T, body string) string {
 
 func baselinePlusAnalyst() string {
 	// Replicates configs/rbac/roles.yaml + the analyst recipe from
-	// docs/auth/ROLE_RECIPES.md. Inline here so the demo is self-
+	// ../owasaka-docs/docs/auth/ROLE_RECIPES.md. Inline here so the demo is self-
 	// contained and can run from an empty FS.
 	return `
 version: 2

@@ -2,10 +2,10 @@
 #
 # Source of truth for "who can do what" on this OWASAKA instance.
 # Loaded at startup and on every SIGHUP or admin reload. See
-# ADR-0061 for the design rationale and docs/auth/AUTHZ.md for the
+# ADR-0061 for the design rationale and ../owasaka-docs/docs/auth/AUTHZ.md for the
 # operator guide, including how to add roles beyond the baseline
 # (analyst, responder, rule-author, break-glass, etc.) via
-# docs/auth/ROLE_RECIPES.md.
+# ../owasaka-docs/docs/auth/ROLE_RECIPES.md.
 #
 # Discipline:
 #   - Edit this file in git. Audit history is the audit history.
