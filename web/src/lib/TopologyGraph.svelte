@@ -3,22 +3,37 @@
     import { networkEvents } from '$lib/websocket';
     import * as d3 from 'd3';
 
-    let svgContainer: HTMLElement;
-
-    let nodes: any[] = [];
-    let links: any[] = [];
-    let simulation: d3.Simulation<any, any>;
-
-    const NODE_COLORS: Record<string, string> = {
-        host:      '#00ffd5',
-        router:    '#ffd700',
-        container: '#7b68ee',
-        vm:        '#ff8c00',
-        unknown:   '#888888',
-        THREAT:    '#ff3333',
+    type TopologyNode = {
+        id: string;
+        label?: string;
+        type?: string;
+        x?: number;
+        y?: number;
+        fx?: number | null;
+        fy?: number | null;
     };
 
-    onMount(async () => {
+    type TopologyLink = {
+        source: string | TopologyNode;
+        target: string | TopologyNode;
+    };
+
+    let svgContainer: HTMLElement;
+
+    let nodes: TopologyNode[] = [];
+    let links: TopologyLink[] = [];
+    let simulation: d3.Simulation<TopologyNode, undefined>;
+
+    const NODE_COLORS: Record<string, string> = {
+        host:      '#27d7c4',
+        router:    '#f2b84b',
+        container: '#9a7cff',
+        vm:        '#b7e26b',
+        unknown:   '#6f7f87',
+        THREAT:    '#f35b5b',
+    };
+
+    onMount(() => {
         const width = svgContainer.clientWidth;
         const height = svgContainer.clientHeight || 450;
 
@@ -31,61 +46,65 @@
         const g = svg.append("g");
 
         // Force simulation initialization
-        simulation = d3.forceSimulation()
+        simulation = d3.forceSimulation<TopologyNode>()
             .force("link", d3.forceLink().id((d: any) => d.id).distance(120))
             .force("charge", d3.forceManyBody().strength(-250))
             .force("center", d3.forceCenter(width / 2, height / 2))
             .force("collide", d3.forceCollide().radius(40));
 
-        let linkSelection = g.append("g").attr("class", "links").selectAll(".link");
-        let nodeSelection = g.append("g").attr("class", "nodes").selectAll(".node");
+        let linkSelection: any = g.append("g").attr("class", "links").selectAll(".link");
+        let nodeSelection: any = g.append("g").attr("class", "nodes").selectAll(".node");
 
         // Load initial topology snapshot from REST
-        try {
-            const resp = await fetch('http://127.0.0.1:8080/api/topology');
-            if (resp.ok) {
-                const snap = await resp.json();
-                nodes = (snap.nodes || []).map((n: any) => ({...n}));
-                links = (snap.links || []).map((l: any) => ({...l}));
+        fetch('http://127.0.0.1:8080/api/topology')
+            .then((resp) => resp.ok ? resp.json() : null)
+            .then((snap) => {
+                if (!snap) return;
+                nodes = (snap.nodes || []).map((n: TopologyNode) => ({...n}));
+                links = (snap.links || []).map((l: TopologyLink) => ({...l}));
                 updateGraph();
-            }
-        } catch (_) { /* backend not yet ready — wait for WS events */ }
+            })
+            .catch(() => { /* backend not yet ready - wait for WS events */ });
 
         function updateGraph() {
             // Re-bind links
-            linkSelection = linkSelection.data(links, d => d.source.id + "-" + d.target.id);
+            linkSelection = linkSelection.data(links, (d: TopologyLink) => {
+                const source = typeof d.source === 'string' ? d.source : d.source.id;
+                const target = typeof d.target === 'string' ? d.target : d.target.id;
+                return `${source}-${target}`;
+            });
             linkSelection.exit().remove();
             const linkEnter = linkSelection.enter().append("line")
                 .attr("class", "link")
-                .style("stroke", "rgba(0, 255, 255, 0.2)")
+                .style("stroke", "rgba(39, 215, 196, 0.22)")
                 .style("stroke-width", 1.5);
             linkSelection = linkEnter.merge(linkSelection as any);
 
             // Re-bind nodes
-            nodeSelection = nodeSelection.data(nodes, d => d.id);
+            nodeSelection = nodeSelection.data(nodes, (d: TopologyNode) => d.id);
             nodeSelection.exit().remove();
             
             const nodeEnter = nodeSelection.enter().append("g")
                 .attr("class", "node")
                 .style("cursor", "grab")
-                .call(d3.drag()
+                .call(d3.drag<SVGGElement, TopologyNode>()
                     .on("start", dragstarted)
                     .on("drag", dragged)
-                    .on("end", dragended) as any);
+                    .on("end", dragended));
 
             nodeEnter.append("circle")
                 .attr("r", 10)
                 .attr("fill", (d: any) => NODE_COLORS[d.type] ?? '#00ffd5')
-                .attr("stroke", "rgba(255,255,255,0.2)")
+                .attr("stroke", "rgba(231,238,242,0.24)")
                 .attr("stroke-width", 2);
 
             nodeEnter.append("text")
                 .attr("dx", 15)
                 .attr("dy", ".35em")
-                .text(d => d.id)
-                .style("fill", "#e0e0e0")
+                .text((d: TopologyNode) => d.id)
+                .style("fill", "#e7eef2")
                 .style("font-size", "11px")
-                .style("font-family", "monospace");
+                .style("font-family", "IBM Plex Mono, JetBrains Mono, ui-monospace, monospace");
 
             nodeSelection = nodeEnter.merge(nodeSelection as any);
 
@@ -97,12 +116,12 @@
 
         simulation.on("tick", () => {
             linkSelection
-                .attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
+                .attr("x1", (d: any) => d.source.x)
+                .attr("y1", (d: any) => d.source.y)
+                .attr("x2", (d: any) => d.target.x)
+                .attr("y2", (d: any) => d.target.y);
 
-            nodeSelection.attr("transform", d => `translate(${d.x},${d.y})`);
+            nodeSelection.attr("transform", (d: TopologyNode) => `translate(${d.x},${d.y})`);
         });
 
         // Live stream bindings
@@ -126,14 +145,14 @@
 
             const nodeType = ev.type === 'THREAT_ALERT' ? 'THREAT' : 'unknown';
 
-            let sNode = nodes.find((n: any) => n.id === sourceId);
+            let sNode = nodes.find((n: TopologyNode) => n.id === sourceId);
             if (!sNode) {
                 sNode = { id: sourceId, label: sourceId, type: nodeType };
                 nodes.push(sNode);
             }
             if (ev.type === 'THREAT_ALERT') sNode.type = 'THREAT';
 
-            let dNode = nodes.find((n: any) => n.id === destId);
+            let dNode = nodes.find((n: TopologyNode) => n.id === destId);
             if (!dNode) {
                 dNode = { id: destId, label: destId, type: nodeType };
                 nodes.push(dNode);
@@ -150,7 +169,7 @@
 
             if (nodes.length > 40) {
                 nodes = nodes.slice(-40);
-                const validIds = new Set(nodes.map((n: any) => n.id));
+                const validIds = new Set(nodes.map((n: TopologyNode) => n.id));
                 links = links.filter((l: any) =>
                     validIds.has(l.source?.id ?? l.source) &&
                     validIds.has(l.target?.id ?? l.target)
@@ -161,19 +180,19 @@
         });
 
         // D3 Drag Event Handlers
-        function dragstarted(event: any, d: any) {
+        function dragstarted(this: SVGGElement, event: any, d: TopologyNode) {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;
             d.fy = d.y;
             d3.select(this).style("cursor", "grabbing");
         }
 
-        function dragged(event: any, d: any) {
+        function dragged(event: any, d: TopologyNode) {
             d.fx = event.x;
             d.fy = event.y;
         }
 
-        function dragended(event: any, d: any) {
+        function dragended(this: SVGGElement, event: any, d: TopologyNode) {
             if (!event.active) simulation.alphaTarget(0);
             d.fx = null;
             d.fy = null;
@@ -196,8 +215,12 @@
         height: 100%;
         min-height: 450px;
         position: relative;
-        background: rgba(0,0,0,0.1);
-        border: 1px solid rgba(255,255,255,0.05);
+        background:
+            linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+            rgba(0,0,0,0.14);
+        background-size: 32px 32px;
+        border: 1px solid var(--border);
         border-radius: 8px;
         overflow: hidden;
     }

@@ -1,15 +1,19 @@
 :root {
-  --bg-darker: #060606;
-  --bg-dark: #0A0A0A;
-  --fg-base: #E0E0E0;
-  --fg-muted: #808080;
-  --accent-cyan: hsl(190, 100%, 55%);
-  --accent-green: hsl(150, 100%, 50%);
-  --accent-red: hsl(355, 100%, 65%);
-  
-  --glass-bg: rgba(20, 20, 22, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.05);
-  --glass-blur: 16px;
+  --bg-darker: #070a0d;
+  --bg-dark: #0e1419;
+  --panel: rgba(14, 20, 25, 0.92);
+  --panel-strong: rgba(20, 28, 35, 0.92);
+  --border: rgba(166, 180, 187, 0.16);
+  --border-strong: rgba(166, 180, 187, 0.28);
+  --fg-base: #e7eef2;
+  --fg-muted: #a6b4bb;
+  --fg-dim: #6f7f87;
+  --accent-cyan: #27d7c4;
+  --accent-green: #b7e26b;
+  --accent-red: #f35b5b;
+  --accent-amber: #f2b84b;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
 }
 
 * {
@@ -19,64 +23,67 @@
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
   background-color: var(--bg-darker);
-  background-image: radial-gradient(circle at 50% 0%, rgba(30,30,40,0.4) 0%, var(--bg-darker) 70%);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(180deg, #101820 0%, var(--bg-darker) 58%);
+  background-size: 48px 48px, 48px 48px, auto;
   color: var(--fg-base);
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Glassmorphism Design System */
 .glass-panel {
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   padding: 1.5rem;
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.8);
+  box-shadow: var(--shadow);
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
 .glass-panel:hover {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-strong);
 }
 
-/* Utility Colors */
 .text-cyan { color: var(--accent-cyan); }
 .text-green { color: var(--accent-green); }
 .text-red { color: var(--accent-red); }
 .text-muted { color: var(--fg-muted); }
 
-/* Typography */
-h1, h2, h3 { font-weight: 600; letter-spacing: -0.03em; }
-h1 { font-size: 2.5rem; margin-bottom: 0.25rem; }
-h2 { font-size: 1.5rem; margin-bottom: 1rem; color: #fff; }
+h1, h2, h3 {
+  font-weight: 700;
+  letter-spacing: 0;
+}
 
 .status-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.4rem 1rem;
-    border-radius: 99px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
+    min-height: 38px;
+    padding: 0.45rem 0.75rem;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0;
     text-transform: uppercase;
-    background: rgba(0,0,0,0.5);
-    border: 1px solid var(--glass-border);
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid var(--border);
+    white-space: nowrap;
 }
 
 .status-badge.online {
     color: var(--accent-green);
-    border-color: rgba(0, 255, 128, 0.2);
+    border-color: rgba(183, 226, 107, 0.34);
 }
 
 .status-badge.offline {
     color: var(--accent-red);
-    border-color: rgba(255, 0, 0, 0.2);
+    border-color: rgba(243, 91, 91, 0.34);
 }
 
 .status-dot {
@@ -87,7 +94,6 @@ h2 { font-size: 1.5rem; margin-bottom: 1rem; color: #fff; }
 .status-badge.online .status-dot { background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
 .status-badge.offline .status-dot { background: var(--accent-red); box-shadow: 0 0 10px var(--accent-red); }
 
-/* Animations */
 @keyframes fadeInSlide {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }

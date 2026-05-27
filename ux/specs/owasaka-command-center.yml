@@ -1,0 +1,100 @@
+name: owasaka-command-center
+version: 0.1.0
+
+philosophy:
+  tone: industrial precision, terminal-native, high-density security operations
+  purpose: Frontend operacional para SIEM air-gapped com feed de inteligencia, topologia de rede, saude do sistema e triagem de ameacas em tempo real.
+  memorable_element: Command grid com telemetria viva, trilhas de enlace e fila de incidentes priorizada.
+  target_audience:
+    - Operadores SOC em ambiente air-gapped
+    - Analistas de resposta a incidente
+    - Administradores de infraestrutura critica
+
+typography:
+  display_font: Space Grotesk
+  mono_font: IBM Plex Mono
+  body_font: Inter Variable
+  scale_ratio: 1.2
+  weights: [400, 500, 600, 700]
+  rules:
+    - Monospace somente para hashes, horarios, hosts, metricas e eventos.
+    - Headings compactos para caber em paineis densos.
+    - Letter spacing sempre 0 exceto em labels pequenas em uppercase.
+
+color_system:
+  mode: dark
+  base:
+    bg_primary: "#070A0D"
+    bg_secondary: "#0E1419"
+    bg_tertiary: "#141C23"
+    border: "#26323B"
+  text:
+    primary: "#E7EEF2"
+    secondary: "#A6B4BB"
+    tertiary: "#6F7F87"
+  accents:
+    primary: "#27D7C4"
+    secondary: "#B7E26B"
+    warning: "#F2B84B"
+    danger: "#F35B5B"
+    violet: "#9A7CFF"
+  semantic:
+    online: "#3DDC84"
+    degraded: "#F2B84B"
+    offline: "#F35B5B"
+
+layout_rules:
+  grid:
+    columns: 12
+    gutter: 20px
+  asymmetry: true
+  direction: left-heavy
+  spacing:
+    section_margin: 24px
+    card_padding: 16px
+    element_gap: 12px
+  panel_radius: 8px
+  density: high
+
+animation:
+  page_load:
+    strategy: staggered_reveal
+    base_delay: 0.08
+    stagger: 0.04
+  interactions:
+    hover_duration: 160
+    hover_effect: border lift with restrained glow
+
+constraints:
+  frameworks:
+    - SvelteKit 2
+    - React 18 via Docusaurus route
+  styling: CSS modules or scoped CSS, no Tailwind dependency required
+  state: framework-local state plus WebSocket stream
+  accessibility: WCAG AA
+
+anti_patterns:
+  - Generic marketing hero
+  - Low-density card wall
+  - Decorative gradient orbs
+  - Oversized rounded pills for primary data
+  - Emoji-driven operational controls
+
+components:
+  command_header:
+    description: Mission status, live link state, protected scope and short operational controls.
+  signal_metrics:
+    description: Small numeric tiles for event volume, critical detections, sources and ingestion latency.
+  intelligence_feed:
+    description: Prioritized event queue with event type, timestamp, host metadata and JSON payload.
+  topology_panel:
+    description: Network relationship view with host/router/container/VM/threat color semantics.
+  response_lane:
+    description: Incident workflow column for containment, collection and recovery stages.
+
+validation_checklist:
+  - Dashboard renders useful state even before backend telemetry is connected.
+  - Live state is visible without relying on color alone.
+  - Event and host identifiers do not overflow compact cards.
+  - Responsive layout works from 360px mobile to wide SOC displays.
+  - Panel radius is 8px or less.
