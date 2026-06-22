@@ -13,15 +13,18 @@ type Service struct {
 	cfg      *config.ProxyConfig
 	logger   *logging.Logger
 	pipeline *events.Pipeline
+	torNodes exitNodeChecker
 	server   *Server
 }
 
-// NewService creates a proxy service (does not start it).
-func NewService(cfg *config.ProxyConfig, logger *logging.Logger, pipeline *events.Pipeline) *Service {
+// NewService creates a proxy service (does not start it). torNodes may
+// be nil to disable Tor exit-node tagging on proxied traffic.
+func NewService(cfg *config.ProxyConfig, logger *logging.Logger, pipeline *events.Pipeline, torNodes exitNodeChecker) *Service {
 	return &Service{
 		cfg:      cfg,
 		logger:   logger,
 		pipeline: pipeline,
+		torNodes: torNodes,
 	}
 }
 
@@ -32,7 +35,7 @@ func (s *Service) Start(ctx context.Context) error {
 		return nil
 	}
 
-	srv, err := NewServer(s.cfg, s.logger, s.pipeline)
+	srv, err := NewServer(s.cfg, s.logger, s.pipeline, s.torNodes)
 	if err != nil {
 		return err
 	}

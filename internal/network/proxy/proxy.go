@@ -17,20 +17,21 @@ import (
 
 // Server is the transparent HTTP/HTTPS forward proxy.
 type Server struct {
-	cfg         *config.ProxyConfig
-	logger      *logging.Logger
-	intercept   *interceptor
-	ca          *CA // nil when MITM disabled
-	httpServer  *http.Server
+	cfg        *config.ProxyConfig
+	logger     *logging.Logger
+	intercept  *interceptor
+	ca         *CA // nil when MITM disabled
+	httpServer *http.Server
 }
 
 // NewServer constructs the proxy server. If MITM is enabled the local CA is
-// loaded (or generated on first boot) from cfg.CertStorage.
-func NewServer(cfg *config.ProxyConfig, logger *logging.Logger, pipeline *events.Pipeline) (*Server, error) {
+// loaded (or generated on first boot) from cfg.CertStorage. torNodes may be
+// nil to disable Tor exit-node tagging.
+func NewServer(cfg *config.ProxyConfig, logger *logging.Logger, pipeline *events.Pipeline, torNodes exitNodeChecker) (*Server, error) {
 	s := &Server{
 		cfg:       cfg,
 		logger:    logger,
-		intercept: newInterceptor(pipeline, logger),
+		intercept: newInterceptor(pipeline, logger, torNodes),
 	}
 	if cfg.MITMEnabled {
 		ca, err := newCA(cfg.CertStorage)
@@ -50,7 +51,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/", s.handleHTTP)
 
 	s.httpServer = &http.Server{
-		Addr:    s.cfg.ListenAddress,
+		Addr: s.cfg.ListenAddress,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodConnect {
 				s.handleConnect(w, r)
