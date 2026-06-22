@@ -272,6 +272,16 @@
             # System Libraries
             libpcap # Required for gopacket
             libcap
+
+            # === eBPF (internal/network/ebpf) ===
+            # Only needed to re-run `go generate ./...` after editing
+            # internal/network/ebpf/bpf/probe.c — the generated
+            # probe_x86_bpfel.go/.o are committed, so a normal build
+            # never needs these at runtime.
+            clang
+            llvm
+            libbpf # bpf/bpf_helpers.h, bpf/bpf_tracing.h, bpf/bpf_core_read.h
+            bpftools # bpftool, used to regenerate bpf/vmlinux.h from /sys/kernel/btf/vmlinux
           ];
 
           # Environment variables
@@ -576,6 +586,10 @@
               description = "Open firewall port for the API (not the proxy — keep it local).";
             };
 
+            torHiddenService = {
+              enable = lib.mkEnableOption "exposing the dashboard via a Tor .onion address";
+            };
+
             user = lib.mkOption {
               type = lib.types.str;
               default = "owasaka";
@@ -690,15 +704,49 @@
                   # Needed for raw socket / packet capture
                   "CAP_NET_RAW"
                   "CAP_NET_ADMIN"
+                  # Needed for the eBPF host network monitor (kernel >= 5.8
+                  # split-capability model: CAP_BPF to load programs/maps,
+                  # CAP_PERFMON to attach kprobes). Older kernels would
+                  # otherwise need the much broader CAP_SYS_ADMIN — not
+                  # granted here; the eBPF service fails non-fatally with
+                  # a warning on kernels that lack split BPF capabilities.
+                  "CAP_BPF"
+                  "CAP_PERFMON"
                 ];
                 AmbientCapabilities = [
                   "CAP_NET_RAW"
                   "CAP_NET_ADMIN"
+                  "CAP_BPF"
+                  "CAP_PERFMON"
                 ];
               };
             };
 
             networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ cfg.apiPort ];
+
+            # Tor hidden service: the tor daemon is managed entirely by
+            # nixpkgs' first-class services.tor module, not by OWASAKA's
+            # own process. OWASAKA only reads the resulting hostname
+            # file at <HiddenServiceDir>/hostname (internal/network/tor
+            # ReadOnionHostname) — no control-port auth/cookie handling
+            # needed. Re-verify `relay.onionServices` against the target
+            # nixpkgs version; this is the modern attrset form.
+            services.tor = lib.mkIf cfg.torHiddenService.enable {
+              enable = true;
+              client.enable = false;
+              relay.onionServices.owasaka-dashboard = {
+                version = 3;
+                map = [
+                  {
+                    port = 80;
+                    target = {
+                      addr = "127.0.0.1";
+                      port = cfg.apiPort;
+                    };
+                  }
+                ];
+              };
+            };
           };
         };
     };

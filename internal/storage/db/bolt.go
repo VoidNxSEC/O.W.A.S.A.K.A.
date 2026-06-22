@@ -14,8 +14,10 @@ import (
 const (
 	// BucketAssets holds our parsed physical and network assets
 	BucketAssets = "assets"
-	// BucketEvents holds a stream of observational data 
+	// BucketEvents holds a stream of observational data
 	BucketEvents = "events"
+	// BucketCanaryTokens holds planted DNS/HTTP decoy tokens
+	BucketCanaryTokens = "canary_tokens"
 )
 
 // Database wraps the boltdb subsystem
@@ -42,6 +44,9 @@ func New(cfg *config.LocalStorageConfig, logger *logging.Logger) (*Database, err
 			return err
 		}
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketEvents)); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists([]byte(BucketCanaryTokens)); err != nil {
 			return err
 		}
 		return nil

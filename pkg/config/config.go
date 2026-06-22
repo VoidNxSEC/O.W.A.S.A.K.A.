@@ -9,20 +9,44 @@ import (
 
 // Config represents the main configuration structure
 type Config struct {
-	Server      ServerConfig      `yaml:"server"`
-	Logging     LoggingConfig     `yaml:"logging"`
-	Network     NetworkConfig     `yaml:"network"`
-	Discovery   DiscoveryConfig   `yaml:"discovery"`
-	Browser     BrowserConfig     `yaml:"browser"`
-	Storage     StorageConfig     `yaml:"storage"`
-	Analytics   AnalyticsConfig   `yaml:"analytics"`
-	Alerts      AlertsConfig      `yaml:"alerts"`
-	Performance PerformanceConfig `yaml:"performance"`
-	Metrics     MetricsConfig     `yaml:"metrics"`
-	Debug       DebugConfig       `yaml:"debug"`
+	Server        ServerConfig        `yaml:"server"`
+	Logging       LoggingConfig       `yaml:"logging"`
+	Network       NetworkConfig       `yaml:"network"`
+	Discovery     DiscoveryConfig     `yaml:"discovery"`
+	Browser       BrowserConfig       `yaml:"browser"`
+	Storage       StorageConfig       `yaml:"storage"`
+	Analytics     AnalyticsConfig     `yaml:"analytics"`
+	Alerts        AlertsConfig        `yaml:"alerts"`
+	Performance   PerformanceConfig   `yaml:"performance"`
+	Metrics       MetricsConfig       `yaml:"metrics"`
+	Debug         DebugConfig         `yaml:"debug"`
 	Security      SecurityConfig      `yaml:"security"`
 	Observability ObservabilityConfig `yaml:"observability"`
+	Canary        CanaryConfig        `yaml:"canary"`
+	EBPF          EBPFConfig          `yaml:"ebpf"`
 	NatsURL       string              `yaml:"nats_url"`
+}
+
+// CanaryConfig controls decoy DNS subdomains and decoy HTTP/URL tokens
+// planted to detect unauthorized access. Triggers fire on first
+// occurrence (no volume threshold) — see configs/rules/dns_canary_trigger.yaml
+// and configs/rules/http_canary_trigger.yaml.
+type CanaryConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	DNSEnabled     bool   `yaml:"dns_enabled"`
+	DNSZone        string `yaml:"dns_zone"` // must contain ".canary." per the static rule match
+	HTTPEnabled    bool   `yaml:"http_enabled"`
+	WebhookPath    string `yaml:"webhook_path"`     // e.g. "/api/canary/webhook"
+	WebhookBaseURL string `yaml:"webhook_base_url"` // public URL embedded in generated decoy links
+}
+
+// EBPFConfig controls the host-local network egress monitor
+// (github.com/cilium/ebpf, no Rust toolchain). Observes connect()
+// syscalls on the OWASAKA host itself — not remote hosts.
+type EBPFConfig struct {
+	Enabled        bool  `yaml:"enabled"`
+	TorPorts       []int `yaml:"tor_ports"`        // e.g. 9001, 9030, 9050, 9051, 9150
+	WatchAllEgress bool  `yaml:"watch_all_egress"` // false = only emit Tor-port/Tor-IP matches
 }
 
 // ObservabilityConfig controls OpenTelemetry tracing and metrics
@@ -37,12 +61,12 @@ type ObservabilityConfig struct {
 // Enabled=false the tracer provider is a no-op — spans are created
 // for code clarity but nothing is exported.
 type TracesConfig struct {
-	Enabled        bool    `yaml:"enabled"`
-	Endpoint       string  `yaml:"endpoint"`         // e.g. tempo.observability:4317
-	ServiceName    string  `yaml:"service_name"`     // defaults to "oswaka"
-	Environment    string  `yaml:"environment"`      // production / staging / dev
-	SamplingRatio  float64 `yaml:"sampling_ratio"`   // 0.0-1.0; default 1.0 when enabled
-	Insecure       bool    `yaml:"insecure"`         // skip TLS to collector (dev only)
+	Enabled       bool    `yaml:"enabled"`
+	Endpoint      string  `yaml:"endpoint"`       // e.g. tempo.observability:4317
+	ServiceName   string  `yaml:"service_name"`   // defaults to "oswaka"
+	Environment   string  `yaml:"environment"`    // production / staging / dev
+	SamplingRatio float64 `yaml:"sampling_ratio"` // 0.0-1.0; default 1.0 when enabled
+	Insecure      bool    `yaml:"insecure"`       // skip TLS to collector (dev only)
 }
 
 // MetricsToggle is a thin on/off for the Prometheus scrape endpoint.
@@ -90,6 +114,34 @@ type NetworkConfig struct {
 	Proxy     ProxyConfig    `yaml:"proxy"`
 	Discovery ScanConfig     `yaml:"discovery"`
 	Topology  TopologyConfig `yaml:"topology"`
+	Tor       TorConfig      `yaml:"tor"`
+}
+
+// TorConfig groups all Tor-related capabilities: passive detection of
+// local assets talking to Tor, an outbound SOCKS5 client for OWASAKA's
+// own egress, and an optional .onion hidden service for the dashboard.
+type TorConfig struct {
+	// Detection: flag local assets connecting to known Tor exit/relay nodes.
+	DetectionEnabled bool `yaml:"detection_enabled"`
+	// ExitNodeListURL is intentionally empty by default — OWASAKA is
+	// air-gap-first (see ObservabilityConfig). Fetching a live Tor
+	// consensus/Onionoo list requires outbound internet access; an
+	// operator must explicitly opt in. Leave empty to rely solely on
+	// ExitNodeListPath (a manually refreshed local file).
+	ExitNodeListURL      string `yaml:"exit_node_list_url"`
+	ExitNodeListPath     string `yaml:"exit_node_list_path"`
+	ExitNodeRefreshHours int    `yaml:"exit_node_refresh_hours"`
+
+	// Outbound SOCKS5 client: route OWASAKA's own IOC/threat-intel
+	// lookups through a local Tor proxy.
+	SOCKSEnabled bool   `yaml:"socks_enabled"`
+	SOCKSAddress string `yaml:"socks_address"` // e.g. 127.0.0.1:9050
+
+	// Hidden service: expose the dashboard via .onion. The tor daemon
+	// itself is managed externally (NixOS services.tor / systemd) —
+	// OWASAKA only reads the resulting hostname file for status display.
+	HiddenServiceEnabled bool   `yaml:"hidden_service_enabled"`
+	HiddenServiceDataDir string `yaml:"hidden_service_data_dir"` // dir containing the "hostname" file
 }
 
 type DNSConfig struct {
@@ -221,10 +273,10 @@ type StorageConfig struct {
 // vault). IdentitiesFile points at the age key file used for
 // restore — usually loaded via systemd LoadCredential on production.
 type BackupConfig struct {
-	Recipients      []string `yaml:"recipients"`
-	IdentitiesFile  string   `yaml:"identities_file"`
-	OutputDir       string   `yaml:"output_dir"`
-	KeepLast        int      `yaml:"keep_last"`
+	Recipients     []string `yaml:"recipients"`
+	IdentitiesFile string   `yaml:"identities_file"`
+	OutputDir      string   `yaml:"output_dir"`
+	KeepLast       int      `yaml:"keep_last"`
 }
 
 // RetentionConfig configures the daily retention sweep. Zero TTL on
