@@ -1,0 +1,9 @@
+name: "HTTP_CANARY_TRIGGERED"
+description: "A planted decoy URL was accessed — first occurrence is an alert-worthy tripwire"
+severity: "CRITICAL"
+event_type: "CANARY"
+logic: "and"
+conditions:
+  - field: "canary_type"
+    operator: "equals"
+    value: "HTTP"

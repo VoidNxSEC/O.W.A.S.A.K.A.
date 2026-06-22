@@ -77,6 +77,27 @@ network:
     export_format: "json"
     graph_algorithm: "force_directed"
 
+  # Tor: detection, outbound SOCKS5 client, optional .onion hidden service
+  tor:
+    # Detection: flag local assets connecting to known Tor exit/relay nodes
+    detection_enabled: false
+    # Left empty by default (air-gap-first) — fetching a live Tor
+    # consensus/Onionoo list requires outbound internet access. Set
+    # this only if your deployment has egress and you accept that
+    # tradeoff; otherwise refresh exit_node_list_path manually offline.
+    exit_node_list_url: ""
+    exit_node_list_path: "/etc/oswaka/tor/exit_nodes.json"
+    exit_node_refresh_hours: 24
+
+    # Outbound SOCKS5 client for OWASAKA's own IOC/threat-intel lookups
+    socks_enabled: false
+    socks_address: "127.0.0.1:9050"
+
+    # Hidden service: tor daemon is managed externally (NixOS
+    # services.tor / systemd); OWASAKA only reads the hostname file.
+    hidden_service_enabled: false
+    hidden_service_data_dir: "/var/lib/tor/owasaka-dashboard"
+
 # Asset discovery configuration
 discovery:
   # Physical device enumeration
@@ -334,6 +355,26 @@ security:
   rbac:
     enabled: false
     roles_file: "/etc/oswaka/roles.yaml"
+
+# Canary tokens: planted DNS subdomains and decoy HTTP/URL tokens that
+# alert on first occurrence. dns_zone must contain ".canary." to match
+# the static correlation rule in configs/rules/dns_canary_trigger.yaml.
+canary:
+  enabled: false
+  dns_enabled: true
+  dns_zone: "canary.internal.example"
+  http_enabled: true
+  webhook_path: "/api/canary/webhook"
+  webhook_base_url: "https://siem.internal.example"
+
+# eBPF host network monitor (github.com/cilium/ebpf, no Rust toolchain).
+# Watches connect() syscalls on the OWASAKA host itself — not remote
+# hosts. Requires CAP_BPF + CAP_PERFMON (kernel >= 5.8); fails non-fatally
+# with a warning if unsupported.
+ebpf:
+  enabled: false
+  tor_ports: [9001, 9030, 9050, 9051, 9150]
+  watch_all_egress: false
 
 # NATS event bus (Spectre)
 nats_url: "nats://localhost:4222"

@@ -16,6 +16,3 @@ conditions:
   - field: "name"
     operator: "contains"
     value: ".xyz."
-  - field: "name"
-    operator: "contains"
-    value: ".onion."

@@ -1,0 +1,9 @@
+name: "DNS_CANARY_TRIGGERED"
+description: "DNS query touched a canary decoy subdomain — first occurrence is an alert-worthy tripwire"
+severity: "CRITICAL"
+event_type: "DNS"
+logic: "and"
+conditions:
+  - field: "name"
+    operator: "contains"
+    value: ".canary."
