@@ -293,6 +293,21 @@ metrics:
     listen_address: "127.0.0.1:9090"
     path: "/metrics"
 
+# OpenTelemetry observability — shared with neoland
+# Both services ship traces to the same OTLP collector (e.g. Grafana Tempo).
+# Neoland reads OTEL_EXPORTER_OTLP_ENDPOINT from env; set it to the same value.
+# Prometheus scrape config: deploy/prometheus/prometheus.yml covers both services.
+observability:
+  traces:
+    enabled: false
+    endpoint: "localhost:4317"
+    service_name: "owasaka"
+    environment: "production"
+    sampling_ratio: 1.0
+    insecure: true
+  metrics:
+    enabled: true
+
 # Development/debugging
 debug:
   enabled: false

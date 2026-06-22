@@ -373,7 +373,7 @@
 
           meta = with pkgs.lib; {
             description = "O.W.A.S.A.K.A. SIEM - Air-gapped Security Monitoring Platform";
-            homepage = "https://github.com/marcosfpina/O.W.A.S.A.K.A";
+            homepage = "https://github.com/marcosfpina/O.W.A.S.A.K.A.";
             license = licenses.unfree;
             maintainers = [ "marcosfpina" ];
             platforms = platforms.linux;

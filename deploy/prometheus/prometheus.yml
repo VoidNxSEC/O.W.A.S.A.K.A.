@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: owasaka
+    environment: production
+
+scrape_configs:
+  - job_name: owasaka
+    static_configs:
+      - targets: ["127.0.0.1:8080"]
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  - job_name: neoland
+    static_configs:
+      - targets: ["127.0.0.1:3001"]
+    metrics_path: /metrics
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: project
+        replacement: neoland
