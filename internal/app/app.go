@@ -9,15 +9,16 @@ import (
 	"syscall"
 	"time"
 
+	"filippo.io/age"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/analytics/correlation"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/analytics/ml"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/analytics/stream"
-	"filippo.io/age"
 
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/api"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/authz"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/browser/automation"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/browser/firefox"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/canary"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/discovery/attack_surface"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/discovery/physical"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/discovery/reconciliation"
@@ -27,10 +28,13 @@ import (
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/identity"
 	owjwt "github.com/marcosfpina/O.W.A.S.A.K.A/internal/identity/jwt"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/identity/middleware"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/models"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/network/discovery"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/network/dns"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/network/ebpf"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/network/proxy"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/network/topology"
+	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/network/tor"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/db"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/integrity"
 	"github.com/marcosfpina/O.W.A.S.A.K.A/internal/storage/migrations"
@@ -284,9 +288,14 @@ func (a *App) Run() error {
 		a.logger.Infow("Transparency log wired", "size", tree.Size())
 	}
 
-	// Hook Engine into Pipeline
+	// Hook Engine into Pipeline. Canary alerts also update the
+	// triggered token's bookkeeping (TriggerCount/TriggeredAt) before
+	// the alert continues into the pipeline as normal.
 	pipeline.SetEngine(engine)
-	engine.SetAlertCallback(pipeline.PushNetworkEvent)
+	engine.SetAlertCallback(func(alert models.NetworkEvent) {
+		canary.RecordTrigger(repository, alert)
+		pipeline.PushNetworkEvent(alert)
+	})
 	pipeline.SetStreamEnricher(streamProc)
 
 	// ML Anomaly Detector — Isolation Forest + behavioral baselining
@@ -402,6 +411,39 @@ func (a *App) Run() error {
 		}
 	}))
 
+	// Canary tokens: unauthenticated webhook (the token itself is the
+	// secret — remote apps/websites that planted a decoy URL don't
+	// hold OWASAKA credentials) + authenticated admin endpoints to
+	// mint/list tokens.
+	apiServer.RegisterHandler("/api/canary/webhook/", api.Instrument("/api/canary/webhook",
+		api.CanaryWebhookHandler(repository, pipeline)))
+
+	canaryAdmin := &api.CanaryAdminHandler{Repo: repository, Cfg: &a.cfg.Canary, Logger: a.logger}
+	apiServer.RegisterProtectedHandler("/api/admin/canary/dns", api.Instrument("/api/admin/canary/dns", canaryAdmin.CreateDNS))
+	apiServer.RegisterProtectedHandler("/api/admin/canary/http", api.Instrument("/api/admin/canary/http", canaryAdmin.CreateHTTP))
+	apiServer.RegisterProtectedHandler("/api/admin/canary", api.Instrument("/api/admin/canary", canaryAdmin.List))
+
+	// Tor hidden service status. The tor daemon itself is managed
+	// externally (NixOS services.tor / systemd, see flake.nix); this
+	// only surfaces the resulting .onion address once published.
+	if a.cfg.Network.Tor.HiddenServiceEnabled {
+		dataDir := a.cfg.Network.Tor.HiddenServiceDataDir
+		if onion, err := tor.ReadOnionHostname(dataDir); err != nil {
+			a.logger.Warnw("Tor hidden service enabled but onion hostname not yet available", "error", err)
+		} else {
+			a.logger.Infow("Tor hidden service active", "onion_address", onion)
+		}
+		apiServer.RegisterHandler("/api/tor/onion", api.Instrument("/api/tor/onion", func(w http.ResponseWriter, r *http.Request) {
+			onion, err := tor.ReadOnionHostname(dataDir)
+			if err != nil {
+				http.Error(w, "onion address unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{"onion_address": onion})
+		}))
+	}
+
 	if err := apiServer.Start(ctx); err != nil {
 		a.logger.Errorw("Failed to start API Server", "error", err)
 	}
@@ -410,6 +452,23 @@ func (a *App) Run() error {
 	// Initialize Services
 	dnsService := dns.NewService(&a.cfg.Network.DNS, a.logger, pipeline)
 	discoveryService := discovery.NewService(&a.cfg.Network.Discovery, a.logger, pipeline)
+
+	// Tor outbound SOCKS5 client — used by future IOC/threat-intel
+	// lookups so OWASAKA's own egress doesn't expose the host's real
+	// address. Falls back to a direct (non-Tor) client if the dialer
+	// can't be constructed; never fatal.
+	torClient, err := tor.NewClient(&a.cfg.Network.Tor, a.logger)
+	if err != nil {
+		a.logger.Warnw("Tor SOCKS5 client unavailable, falling back to direct egress", "error", err)
+		torClient, _ = tor.NewClient(&config.TorConfig{}, a.logger)
+	}
+
+	// Tor exit-node detection — local-file-first (air-gap-safe); only
+	// fetches a live list if ExitNodeListURL is explicitly configured.
+	torExitNodes := tor.NewExitNodeService(&a.cfg.Network.Tor, a.logger, torClient)
+	if err := torExitNodes.Start(ctx); err != nil {
+		a.logger.Errorw("Failed to start Tor exit-node list service", "error", err)
+	}
 
 	// Start Services
 	if err := dnsService.Start(ctx); err != nil {
@@ -446,11 +505,21 @@ func (a *App) Run() error {
 	}
 
 	// Transparent Proxy Engine — HTTP/HTTPS interception + DPI
-	proxyService := proxy.NewService(&a.cfg.Network.Proxy, a.logger, pipeline)
+	proxyService := proxy.NewService(&a.cfg.Network.Proxy, a.logger, pipeline, torExitNodes)
 	if err := proxyService.Start(ctx); err != nil {
 		a.logger.Errorw("Failed to start Proxy service", "error", err)
 	}
 	defer proxyService.Stop()
+
+	// eBPF host network monitor — watches local connect() syscalls for
+	// Tor-port/Tor-exit-node egress. Requires CAP_BPF+CAP_PERFMON on
+	// kernel >= 5.8; failure (unsupported kernel, missing capability)
+	// is logged and non-fatal.
+	ebpfService := ebpf.NewService(&a.cfg.EBPF, a.logger, pipeline, torExitNodes)
+	if err := ebpfService.Start(ctx); err != nil {
+		a.logger.Errorw("Failed to start eBPF host network monitor", "error", err)
+	}
+	defer ebpfService.Stop()
 
 	// M2 Browser Hardening
 	firefoxService := firefox.NewService(&a.cfg.Browser, a.logger)
