@@ -104,3 +104,6 @@ __debug_bin
 
 # OS
 Thumbs.db
+
+# local build artifacts
+/oswaka-ui
