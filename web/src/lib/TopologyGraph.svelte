@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { networkEvents } from '$lib/websocket';
+    import { networkEvents, getApiBase } from '$lib/websocket';
     import * as d3 from 'd3';
 
     type TopologyNode = {
@@ -56,7 +56,7 @@
         let nodeSelection: any = g.append("g").attr("class", "nodes").selectAll(".node");
 
         // Load initial topology snapshot from REST
-        fetch('http://127.0.0.1:8080/api/topology')
+        fetch(`${getApiBase()}/api/topology`)
             .then((resp) => resp.ok ? resp.json() : null)
             .then((snap) => {
                 if (!snap) return;
