@@ -18,6 +18,8 @@ const (
 	BucketEvents = "events"
 	// BucketCanaryTokens holds planted DNS/HTTP decoy tokens
 	BucketCanaryTokens = "canary_tokens"
+	// BucketAlerts holds the alert lifecycle records (NEW→TRIAGING→CONTAINED→CLOSED)
+	BucketAlerts = "alerts"
 )
 
 // Database wraps the boltdb subsystem
@@ -47,6 +49,9 @@ func New(cfg *config.LocalStorageConfig, logger *logging.Logger) (*Database, err
 			return err
 		}
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketCanaryTokens)); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists([]byte(BucketAlerts)); err != nil {
 			return err
 		}
 		return nil

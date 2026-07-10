@@ -288,12 +288,25 @@ func (a *App) Run() error {
 		a.logger.Infow("Transparency log wired", "size", tree.Size())
 	}
 
+	// alertSink persists every THREAT_ALERT to BucketAlerts so the lifecycle
+	// API (Wave B) can triage and close them. Shared by both the correlation
+	// engine and the temporal correlator callbacks.
+	alertSink := func(ev models.NetworkEvent) {
+		if ev.Type == models.EventAlert {
+			rec := models.AlertFromEvent(ev)
+			if err := repository.SaveAlert(&rec); err != nil {
+				a.logger.Warnw("Failed to persist alert", "id", ev.ID, "error", err)
+			}
+		}
+	}
+
 	// Hook Engine into Pipeline. Canary alerts also update the
 	// triggered token's bookkeeping (TriggerCount/TriggeredAt) before
 	// the alert continues into the pipeline as normal.
 	pipeline.SetEngine(engine)
 	engine.SetAlertCallback(func(alert models.NetworkEvent) {
 		canary.RecordTrigger(repository, alert)
+		alertSink(alert)
 		pipeline.PushNetworkEvent(alert)
 	})
 	pipeline.SetStreamEnricher(streamProc)
@@ -304,6 +317,16 @@ func (a *App) Run() error {
 		a.logger.Errorw("Failed to start ML Anomaly Detector", "error", err)
 	}
 	pipeline.SetEventObserver(mlService)
+
+	// Temporal Correlator — stateful kill-chain detection with MITRE ATT&CK mapping
+	temporalCorr := correlation.NewTemporalCorrelator(correlation.DefaultChains(), a.logger)
+	temporalCorr.SetAlertCallback(func(alert models.NetworkEvent) {
+		canary.RecordTrigger(repository, alert)
+		alertSink(alert)
+		pipeline.PushNetworkEvent(alert)
+	})
+	pipeline.SetChainCorrelator(temporalCorr)
+	a.logger.Infow("Temporal correlator active", "chains", len(correlation.DefaultChains()))
 
 	// Topology Mapper — builds live network graph from asset/event streams
 	topoBuilder := topology.NewBuilder(a.logger)
@@ -422,6 +445,26 @@ func (a *App) Run() error {
 	apiServer.RegisterProtectedHandler("/api/admin/canary/dns", api.Instrument("/api/admin/canary/dns", canaryAdmin.CreateDNS))
 	apiServer.RegisterProtectedHandler("/api/admin/canary/http", api.Instrument("/api/admin/canary/http", canaryAdmin.CreateHTTP))
 	apiServer.RegisterProtectedHandler("/api/admin/canary", api.Instrument("/api/admin/canary", canaryAdmin.List))
+
+	// Honeypot VM canary tokens (Wave E) — mints a HONEYPOT_VM token and
+	// returns the NixOS snippet for wiring the reporter to this webhook.
+	honeypotAdmin := &api.HoneypotAdminHandler{Repo: repository, Cfg: &a.cfg.Canary, Logger: a.logger}
+	apiServer.RegisterProtectedHandler("/api/admin/honeypot",
+		api.Instrument("/api/admin/honeypot", honeypotAdmin.CreateHoneypot))
+
+	// Alert lifecycle API (Wave B)
+	alertsH := &api.AlertsHandler{Repo: repository, Hub: apiServer.Hub, Logger: a.logger}
+	apiServer.RegisterProtectedHandler("/api/alerts/", api.Instrument("/api/alerts", alertsH.PatchAlert))
+	apiServer.RegisterProtectedHandler("/api/alerts", api.Instrument("/api/alerts", alertsH.ServeAlerts))
+	apiServer.RegisterProtectedHandler("/api/incidents/containment",
+		api.Instrument("/api/incidents/containment", alertsH.ServeContainment))
+
+	// Event search API (Wave B)
+	eventsH := &api.EventsHandler{Repo: repository, Logger: a.logger}
+	apiServer.RegisterProtectedHandler("/api/events", api.Instrument("/api/events", eventsH.ServeEvents))
+
+	a.logger.Infow("Alert lifecycle API registered",
+		"endpoints", []string{"/api/alerts", "/api/alerts/{id}", "/api/incidents/containment", "/api/events"})
 
 	// Tor hidden service status. The tor daemon itself is managed
 	// externally (NixOS services.tor / systemd, see flake.nix); this

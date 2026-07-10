@@ -35,6 +35,11 @@ type EventObserver interface {
 	Observe(e models.NetworkEvent)
 }
 
+// ChainCorrelator detects multi-event kill-chain sequences across time windows.
+type ChainCorrelator interface {
+	Observe(e models.NetworkEvent)
+}
+
 // TransparencyLog is the subset of internal/storage/transparency.Tree
 // surface that the Pipeline depends on. Declared here as an interface
 // so the events package does not import the transparency package
@@ -54,6 +59,7 @@ type Pipeline struct {
 	topology     TopologyMapper
 	stream       StreamEnricher
 	observer     EventObserver
+	chains       ChainCorrelator
 	signer       *Signer
 	transparency TransparencyLog
 }
@@ -159,6 +165,11 @@ func (p *Pipeline) SetStreamEnricher(s StreamEnricher) {
 // SetEventObserver binds a passive observer (e.g., ML anomaly detector) to the pipeline
 func (p *Pipeline) SetEventObserver(o EventObserver) {
 	p.observer = o
+}
+
+// SetChainCorrelator binds the stateful kill-chain detector to the pipeline
+func (p *Pipeline) SetChainCorrelator(c ChainCorrelator) {
+	p.chains = c
 }
 
 // PushNetworkEvent accepts an event structure and dispatches globally
@@ -272,6 +283,11 @@ func (p *Pipeline) PushNetworkEvent(e models.NetworkEvent) {
 	// 7. Feed passive observers (ML anomaly detection)
 	if p.observer != nil && e.Type != models.EventAlert {
 		go p.observer.Observe(e)
+	}
+
+	// 8. Feed stateful kill-chain correlator
+	if p.chains != nil && e.Type != models.EventAlert {
+		go p.chains.Observe(e)
 	}
 }
 

@@ -7,8 +7,9 @@ import "time"
 type CanaryTokenType string
 
 const (
-	CanaryDNS  CanaryTokenType = "DNS"
-	CanaryHTTP CanaryTokenType = "HTTP"
+	CanaryDNS        CanaryTokenType = "DNS"
+	CanaryHTTP       CanaryTokenType = "HTTP"
+	CanaryHoneypotVM CanaryTokenType = "HONEYPOT_VM"
 )
 
 // CanaryToken is a planted tripwire. DNS tokens are unique subdomains
