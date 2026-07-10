@@ -1,0 +1,9 @@
+name: "BRUTE_FORCE_ATTEMPT"
+description: "Excessive connection attempts from a single source (>100 events/min)"
+severity: "CRITICAL"
+event_type: ""
+logic: "and"
+conditions:
+  - field: "stream.count_1m"
+    operator: "gt"
+    value: "100"

@@ -1,0 +1,9 @@
+name: "DNS_TUNNELING_SUSPECT"
+description: "DNS query with unusually long subdomain chains indicative of DNS tunneling"
+severity: "HIGH"
+event_type: "DNS"
+logic: "and"
+conditions:
+  - field: "name"
+    operator: "contains"
+    value: "......"

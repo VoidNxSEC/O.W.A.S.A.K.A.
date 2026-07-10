@@ -24,17 +24,27 @@ func NewEngine(cfg *config.CorrelationConfig, logger *logging.Logger) *Engine {
 		rules:  DefaultRules(),
 	}
 
-	// Load custom YAML rules from disk
-	if cfg.CustomRulesEnabled && cfg.RulesDir != "" {
-		yamlRules, err := LoadRulesFromDir(cfg.RulesDir)
+	// Load built-in rules embedded in the binary.
+	builtIn, err := LoadRulesFromFS(embeddedRulesFS, "rules")
+	if err != nil {
+		logger.Errorw("Failed to load embedded correlation rules", "error", err)
+	} else if len(builtIn) > 0 {
+		e.rules = append(e.rules, builtIn...)
+		logger.Infow("Loaded built-in YAML correlation rules", "count", len(builtIn))
+	}
+
+	// Append operator-supplied rules from disk (overrides or extensions).
+	if cfg.RulesDir != "" {
+		custom, err := LoadRulesFromDir(cfg.RulesDir)
 		if err != nil {
-			logger.Errorw("Failed to load YAML correlation rules", "dir", cfg.RulesDir, "error", err)
-		} else if len(yamlRules) > 0 {
-			e.rules = append(e.rules, yamlRules...)
-			logger.Infow("Loaded YAML correlation rules", "count", len(yamlRules), "dir", cfg.RulesDir)
+			logger.Errorw("Failed to load custom correlation rules", "dir", cfg.RulesDir, "error", err)
+		} else if len(custom) > 0 {
+			e.rules = append(e.rules, custom...)
+			logger.Infow("Loaded custom YAML correlation rules", "count", len(custom), "dir", cfg.RulesDir)
 		}
 	}
 
+	logger.Infow("Correlation engine ready", "total_rules", len(e.rules))
 	return e
 }
 

@@ -1,0 +1,9 @@
+name: "TOR_EXIT_NODE_TRAFFIC"
+description: "Outbound connection to a known Tor exit/relay node"
+severity: "HIGH"
+event_type: "PROXY"
+logic: "and"
+conditions:
+  - field: "tor_exit_node"
+    operator: "equals"
+    value: "true"

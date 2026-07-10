@@ -1,0 +1,9 @@
+name: "PORT_SCAN_FLOOD"
+description: "High-rate port scanning from a single source (>50 events/min)"
+severity: "HIGH"
+event_type: "PORT_SCAN"
+logic: "and"
+conditions:
+  - field: "stream.count_1m"
+    operator: "gt"
+    value: "50"

@@ -2,6 +2,7 @@ package correlation
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -178,7 +179,41 @@ func LoadRulesFromDir(dir string) ([]Rule, error) {
 			return nil, fmt.Errorf("parsing rule file %s: %w", entry.Name(), err)
 		}
 		if spec.RuleName == "" {
-			continue // skip files without a name
+			continue
+		}
+		rules = append(rules, &YAMLRule{spec: spec})
+	}
+	return rules, nil
+}
+
+// LoadRulesFromFS reads all .yaml/.yml files from an fs.FS rooted at dir.
+func LoadRulesFromFS(fsys fs.FS, dir string) ([]Rule, error) {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		return nil, fmt.Errorf("reading embedded rules dir %s: %w", dir, err)
+	}
+
+	var rules []Rule
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+
+		data, err := fs.ReadFile(fsys, dir+"/"+entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("reading embedded rule %s: %w", entry.Name(), err)
+		}
+
+		var spec YAMLRuleSpec
+		if err := yaml.Unmarshal(data, &spec); err != nil {
+			return nil, fmt.Errorf("parsing embedded rule %s: %w", entry.Name(), err)
+		}
+		if spec.RuleName == "" {
+			continue
 		}
 		rules = append(rules, &YAMLRule{spec: spec})
 	}

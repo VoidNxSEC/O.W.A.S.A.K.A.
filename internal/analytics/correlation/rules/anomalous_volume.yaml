@@ -1,0 +1,9 @@
+name: "ANOMALOUS_TRAFFIC_VOLUME"
+description: "Abnormally high event volume from a single source (>1000 events in 15 minutes)"
+severity: "MEDIUM"
+event_type: ""
+logic: "and"
+conditions:
+  - field: "stream.count_15m"
+    operator: "gt"
+    value: "1000"

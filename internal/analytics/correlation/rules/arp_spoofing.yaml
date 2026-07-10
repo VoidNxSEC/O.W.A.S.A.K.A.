@@ -1,0 +1,9 @@
+name: "ARP_SPOOF_SUSPECT"
+description: "ARP event with gratuitous flag or suspicious source"
+severity: "CRITICAL"
+event_type: "ARP"
+logic: "and"
+conditions:
+  - field: "gratuitous"
+    operator: "equals"
+    value: "true"

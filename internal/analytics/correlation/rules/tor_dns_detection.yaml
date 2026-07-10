@@ -1,0 +1,12 @@
+name: "TOR_ONION_DNS_LOOKUP"
+description: "DNS query for a .onion address — indicates a local asset attempting Tor hidden service resolution"
+severity: "HIGH"
+event_type: "DNS"
+logic: "or"
+conditions:
+  - field: "name"
+    operator: "contains"
+    value: ".onion."
+  - field: "name"
+    operator: "contains"
+    value: ".onion"

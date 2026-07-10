@@ -1,0 +1,9 @@
+name: "SERVICE_ENUMERATION"
+description: "Rapid port scanning indicative of service discovery/enumeration"
+severity: "MEDIUM"
+event_type: "PORT_SCAN"
+logic: "and"
+conditions:
+  - field: "stream.count_5m"
+    operator: "gt"
+    value: "200"
