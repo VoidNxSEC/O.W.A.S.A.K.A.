@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# owasaka-triage — rofi alert triage for O.W.A.S.A.K.A.
+#
+# Super+Alt+A in Hyprland opens this.
+# Fetches NEW alerts, presents them in rofi, lets you triage inline.
+#
+# Dependencies: rofi (wayland), curl, jq
+# Config via env:
+#   OSWAKA_HOST  (default: localhost:8080)
+#   OSWAKA_TOKEN (default: empty)
+
+set -euo pipefail
+
+HOST="${OSWAKA_HOST:-localhost:8080}"
+TOKEN="${OSWAKA_TOKEN:-}"
+API="http://${HOST}"
+
+auth_header() {
+    if [[ -n "$TOKEN" ]]; then
+        echo "Authorization: Bearer $TOKEN"
+    else
+        echo "X-No-Auth: 1"
+    fi
+}
+
+# ── Fetch alerts ─────────────────────────────────────────────────────────────
+
+alerts_json=$(curl -sf \
+    -H "$(auth_header)" \
+    "${API}/api/alerts?status=NEW&limit=50" 2>/dev/null) || {
+    rofi -e "OWASAKA core unreachable at ${HOST}" -theme-str 'window { width: 500px; }'
+    exit 1
+}
+
+count=$(echo "$alerts_json" | jq 'length')
+
+if [[ "$count" -eq 0 ]]; then
+    rofi -e "No NEW alerts — all clear" \
+        -theme-str 'window { width: 400px; } * { background-color: #0d1820; text-color: #27d7c4; }'
+    exit 0
+fi
+
+# ── Build rofi menu entries ───────────────────────────────────────────────────
+# Format: SEV  RULE                SOURCE        ID (hidden trailing field)
+
+menu_entries=$(echo "$alerts_json" | jq -r '.[] |
+    "\(.severity // "?")  \(.rule_name // "unknown")  —  \(.source // "?")  [\(.id)]"
+')
+
+# ── Present in rofi ──────────────────────────────────────────────────────────
+
+chosen=$(echo "$menu_entries" | rofi \
+    -dmenu \
+    -i \
+    -p "⚠ OWASAKA Alerts (NEW: $count)" \
+    -mesg "Select alert • Enter=actions • Esc=close" \
+    -theme-str '
+        window   { width: 900px; border: 2px solid #ff5555; border-radius: 10px; }
+        mainbox  { padding: 8px; background-color: #0d1820; }
+        inputbar { background-color: #0d1820; border: 1px solid #1e2e3a; border-radius: 6px; padding: 6px 10px; }
+        entry    { text-color: #a6b4bb; }
+        prompt   { text-color: #ff5555; font: "JetBrainsMono Nerd Font Bold 12"; }
+        listview { lines: 10; background-color: transparent; }
+        element  { padding: 6px 10px; border-radius: 6px; }
+        element selected { background-color: rgba(255,51,51,0.18); text-color: #ffffff; }
+        element-text { text-color: #a6b4bb; font: "JetBrainsMono Nerd Font 12"; }
+        message  { padding: 6px; }
+        textbox  { text-color: #4a5a62; font: "JetBrainsMono Nerd Font 11"; }
+    ' \
+) || exit 0  # rofi returns non-zero on Esc
+
+# Extract alert ID from the trailing [id] field
+alert_id=$(echo "$chosen" | grep -oP '\[\K[^\]]+' | tail -1)
+alert_rule=$(echo "$chosen" | awk '{print $2}')
+alert_src=$(echo "$chosen" | sed 's/.*—  //; s/  \[.*//')
+
+# ── Action sub-menu ───────────────────────────────────────────────────────────
+
+action=$(printf "TRIAGE — move to TRIAGING\nSEAL HOST — block %s via nftables\nCLOSE — mark as closed\nCANCEL" "$alert_src" | \
+    rofi \
+    -dmenu \
+    -i \
+    -p "Action for $alert_rule" \
+    -mesg "$alert_src  •  id: $alert_id" \
+    -theme-str '
+        window   { width: 600px; border: 2px solid #f2b84b; border-radius: 10px; }
+        mainbox  { padding: 8px; background-color: #0d1820; }
+        inputbar { background-color: #0d1820; border: 1px solid #1e2e3a; border-radius: 6px; padding: 6px 10px; }
+        entry    { text-color: #a6b4bb; }
+        prompt   { text-color: #f2b84b; font: "JetBrainsMono Nerd Font Bold 12"; }
+        listview { lines: 4; background-color: transparent; }
+        element  { padding: 6px 10px; border-radius: 6px; }
+        element selected { background-color: rgba(242,184,75,0.18); text-color: #ffffff; }
+        element-text { text-color: #a6b4bb; font: "JetBrainsMono Nerd Font 12"; }
+        message  { padding: 6px; }
+        textbox  { text-color: #27d7c4; font: "JetBrainsMono Nerd Font 11"; }
+    ' \
+) || exit 0
+
+case "$action" in
+    TRIAGE*)
+        curl -sf -X PATCH \
+            -H "$(auth_header)" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"TRIAGING","note":"triaged via Hyprland rofi"}' \
+            "${API}/api/alerts/${alert_id}" > /dev/null
+        notify-send --urgency=low --app-name=OWASAKA \
+            "Alert triaged" "$alert_rule moved to TRIAGING"
+        ;;
+
+    SEAL*)
+        nft_cmd="nft add rule inet filter input ip saddr ${alert_src} drop"
+
+        # Try the API
+        api_ok=false
+        if curl -sf -X POST \
+            -H "$(auth_header)" \
+            -H "Content-Type: application/json" \
+            -d "{\"ip\":\"${alert_src}\"}" \
+            "${API}/api/incidents/containment" > /dev/null 2>&1; then
+            api_ok=true
+        fi
+
+        # Always show the nftables command (copy to clipboard via wl-copy)
+        echo -n "$nft_cmd" | wl-copy 2>/dev/null || true
+
+        if [[ "$api_ok" == true ]]; then
+            notify-send --urgency=critical --app-name=OWASAKA \
+                "Seal Host — ${alert_src}" \
+                "Containment sent to SIEM.\nnftables command copied to clipboard."
+        else
+            notify-send --urgency=critical --app-name=OWASAKA \
+                "Seal Host — ${alert_src}" \
+                "API unreachable — run as root:\n${nft_cmd}\n\n(Command copied to clipboard)"
+        fi
+        ;;
+
+    CLOSE*)
+        curl -sf -X PATCH \
+            -H "$(auth_header)" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"CLOSED","note":"closed via Hyprland rofi"}' \
+            "${API}/api/alerts/${alert_id}" > /dev/null
+        notify-send --urgency=low --app-name=OWASAKA \
+            "Alert closed" "$alert_rule marked CLOSED"
+        ;;
+
+    CANCEL*|"")
+        exit 0
+        ;;
+esac

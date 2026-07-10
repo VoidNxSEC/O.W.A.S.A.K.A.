@@ -1,0 +1,55 @@
+// O.W.A.S.A.K.A. Waybar module — include in your waybar config.json
+//
+// 1. Add this file's content to your modules-right (or wherever you want it):
+//      "modules-right": ["custom/owasaka", ...]
+//
+// 2. Merge the module definition below into your waybar config:
+//
+// 3. Include owasaka.css in your waybar style.css:
+//      @import "~/.config/waybar/owasaka.css";
+//
+// 4. Start owasaka-bar as part of your hyprland startup:
+//      exec-once = owasaka-bar --host localhost:8080 --token $OSWAKA_TOKEN
+//
+// 5. Start owasaka-notify for desktop alerts:
+//      exec-once = owasaka-notify --host localhost:8080 --token $OSWAKA_TOKEN
+
+{
+    "custom/owasaka": {
+        // Long-running daemon — outputs a JSON line on every event.
+        // Waybar reads each line and updates instantly (no polling).
+        "exec": "owasaka-bar --host localhost:8080",
+
+        // JSON mode: each stdout line is parsed as {text, alt, tooltip, class, percentage}
+        "return-type": "json",
+
+        // 0 = run exec once and keep reading (persistent process mode)
+        "interval": 0,
+
+        // Restart if the process dies unexpectedly
+        "restart-interval": 3,
+
+        // Left-click → open web UI
+        "on-click": "xdg-open http://localhost:8080",
+
+        // Middle-click → open SwayNC notification center
+        "on-click-middle": "swaync-client -t",
+
+        // Right-click → rofi alert triage
+        "on-click-right": "owasaka-triage",
+
+        // Scroll up/down → cycle through workspaces with SIEM context
+        "on-scroll-up": "hyprctl dispatch workspace 9",
+        "on-scroll-down": "hyprctl dispatch workspace previous",
+
+        // Format string: text comes from the daemon, icon is static prefix
+        "format": "󱐍 {}",
+        "format-disconnected": "󱐍 ○ offline",
+
+        "tooltip": true,
+
+        // CSS classes defined in owasaka.css
+        // connected | disconnected | alert | critical
+        "max-length": 40
+    }
+}
