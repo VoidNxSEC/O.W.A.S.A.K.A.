@@ -104,7 +104,7 @@ The pipeline is wired in `internal/app/app.go` — this is the single place wher
 | `internal/storage/integrity/` | Merkle tree verifier + immutable audit log |
 | `internal/storage/nas/` | NFS/SMB connector |
 | `internal/analytics/stream/` | In-memory event pipeline, sliding window counters (1m/5m/15m) |
-| `internal/analytics/correlation/` | YAML rule engine (`configs/rules/*.yaml`) |
+| `internal/analytics/correlation/` | YAML rule engine + DGA detection; built-in rules embedded from `internal/analytics/correlation/rules/*.yaml` |
 | `internal/analytics/ml/` | Isolation Forest + 7-day behavioral baseline (gob persistence) |
 | `pkg/config/` | YAML config loader (`configs/examples/default.yaml` is the reference) |
 | `pkg/logging/` | zap `SugaredLogger` wrapper with lumberjack rotation |
@@ -117,11 +117,13 @@ The pipeline is wired in `internal/app/app.go` — this is the single place wher
 
 ### Configuration
 
-Config is YAML, loaded via `pkg/config/Load(path)`. The canonical reference is `configs/examples/default.yaml`. Key env var overrides: `NATS_URL` (overrides `nats_url`), `OSWAKA_ENV`, `OSWAKA_CONFIG`. The `analytics.correlation.rules_dir` points to `configs/rules/` where YAML detection rules live.
+Config is YAML, loaded via `pkg/config/Load(path)`. The canonical reference is `configs/examples/default.yaml`. Key env var overrides: `NATS_URL` (overrides `nats_url`), `OSWAKA_ENV`, `OSWAKA_CONFIG`. The `analytics.correlation.rules_dir` is optional — use it to add operator-specific rules on top of the built-in set.
 
 ### Detection Rules
 
-Rules are YAML files under `configs/rules/`. The correlation engine loads them at startup — a restart is required to pick up changes (hot-reload is a known gap). Ten baseline rules are included covering: port scan, DNS tunneling, brute force, ARP spoofing, lateral movement, service enumeration, malicious TLD, suspicious proxy, VM escape, anomalous volume.
+Built-in rules are YAML files embedded into the binary at `internal/analytics/correlation/rules/` (14 rules covering: port scan, DNS tunneling, DGA detection, brute force, ARP spoofing, lateral movement, service enumeration, malicious TLD, suspicious proxy, canary tokens, VM escape, Tor, anomalous volume). They are active out-of-the-box without any filesystem setup.
+
+Operator rules (additional or site-specific) go in the directory configured by `analytics.correlation.rules_dir` (default: `/etc/oswaka/rules` for NixOS deployments). These are appended to the built-in set at startup — a restart is required to pick up changes (hot-reload is a known gap).
 
 ### Frontend
 

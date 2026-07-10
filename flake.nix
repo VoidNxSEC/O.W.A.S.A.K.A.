@@ -2,8 +2,12 @@
   description = "O.W.A.S.A.K.A. SIEM - Air-gapped Security Monitoring Platform";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url     = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    # Honeypot micro-VM host (Wave E).
+    # Pin with: nix flake update microvm
+    microvm.url                    = "github:astro/microvm.nix";
+    microvm.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -11,6 +15,7 @@
       self,
       nixpkgs,
       flake-utils,
+      microvm,
     }@inputs:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -366,6 +371,158 @@
           # qemu            # Emulation
         };
 
+        # ── Analyst shell: air-gapped RAM scratchpad + USB printer ─────────────
+        # Usage: nix develop .#analyst
+        #
+        # All writes go to a tmpfs mount in RAM — nothing hits disk.
+        # Notes are printed via CUPS to a USB printer and then shredded.
+        # Network egress is disabled inside the shell.
+        devShells.analyst = pkgs.mkShell {
+          name = "owasaka-analyst";
+
+          buildInputs = with pkgs; [
+            neovim   # editor (redirected to RAM)
+            cups     # USB printer via lp/lpstat
+            fzf      # interactive note picker for print-note
+            util-linux  # mount / umount
+          ];
+
+          shellHook = ''
+            export ANALYST_DIR="/tmp/owasaka-analyst-$$"
+            mkdir -p "$ANALYST_DIR"
+
+            # Mount tmpfs so content lives in RAM only, not on disk.
+            # Requires the user to have mount capability (root or fuse).
+            # Falls back silently to the plain directory when not available.
+            mount -t tmpfs -o size=64m,mode=700 tmpfs "$ANALYST_DIR" 2>/dev/null \
+              && _TMPFS_MOUNTED=1 \
+              || _TMPFS_MOUNTED=0
+
+            # Redirect all editor/cache paths into RAM
+            export MYVIMRC="$ANALYST_DIR/.vimrc"
+            export XDG_DATA_HOME="$ANALYST_DIR/.local/share"
+            export XDG_CACHE_HOME="$ANALYST_DIR/.cache"
+            export XDG_RUNTIME_DIR="$ANALYST_DIR/.runtime"
+            export TMPDIR="$ANALYST_DIR"
+            mkdir -p "$XDG_DATA_HOME" "$XDG_CACHE_HOME" "$XDG_RUNTIME_DIR"
+
+            # Disable all network proxies and external lookups
+            unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ftp_proxy FTP_PROXY
+            export no_proxy="*" NO_PROXY="*"
+
+            # ── Aliases ──────────────────────────────────────────────────────
+            alias note='nvim "$ANALYST_DIR/incident-$(date +%Y%m%d-%H%M%S).md"'
+
+            alias ls-notes='ls -lh "$ANALYST_DIR"/*.md 2>/dev/null \
+              || echo "(no notes yet)"'
+
+            alias print-note='
+              _P=$(lpstat -p 2>/dev/null | awk "{print \$2}" | head -1)
+              if [ -z "$_P" ]; then
+                echo "No CUPS printer detected. Run: printer-setup"
+              else
+                _F=$(ls "$ANALYST_DIR"/*.md 2>/dev/null \
+                     | ${pkgs.fzf}/bin/fzf --prompt="Select note to print: ")
+                [ -n "$_F" ] && lp -d "$_P" "$_F" \
+                  && echo "Sent to $_P" \
+                  || echo "Aborted."
+              fi
+            '
+
+            alias secure-clear='
+              find "$ANALYST_DIR" -type f -exec shred -uz {} \; 2>/dev/null
+              [ "$_TMPFS_MOUNTED" = "1" ] \
+                && umount "$ANALYST_DIR" 2>/dev/null \
+                && rmdir  "$ANALYST_DIR" 2>/dev/null
+              echo "Scratchpad cleared."
+            '
+
+            alias printer-setup='
+              echo "=== USB devices ==="
+              ls /dev/usb/lp* 2>/dev/null || echo "  (none at /dev/usb/lp*)"
+              echo "=== CUPS printers ==="
+              lpstat -p 2>/dev/null || echo "  (CUPS not running or no printers)"
+              echo ""
+              echo "To add a USB printer:"
+              echo "  lpadmin -p PRINTERNAME -E -v usb://Make/Model -m everywhere"
+            '
+
+            # Auto-shred on shell exit (Ctrl-D or exit)
+            trap '
+              find "$ANALYST_DIR" -type f -exec shred -uz {} \; 2>/dev/null
+              [ "$_TMPFS_MOUNTED" = "1" ] \
+                && umount "$ANALYST_DIR" 2>/dev/null \
+                && rmdir  "$ANALYST_DIR" 2>/dev/null
+            ' EXIT
+
+            _STORAGE_MSG="RAM (tmpfs)"
+            [ "$_TMPFS_MOUNTED" = "0" ] && _STORAGE_MSG="DISK (tmpfs unavailable — needs root)"
+
+            echo ""
+            echo "╔══════════════════════════════════════════════╗"
+            echo "║  O.W.A.S.A.K.A.  Analyst Shell              ║"
+            echo "╠══════════════════════════════════════════════╣"
+            echo "║  Storage : $_STORAGE_MSG"
+            echo "║  Path    : $ANALYST_DIR"
+            echo "╠══════════════════════════════════════════════╣"
+            echo "║  note           open RAM editor              ║"
+            echo "║  ls-notes       list current notes           ║"
+            echo "║  print-note     fzf → select → USB printer   ║"
+            echo "║  printer-setup  detect USB / CUPS printers   ║"
+            echo "║  secure-clear   shred all + unmount          ║"
+            echo "╚══════════════════════════════════════════════╝"
+            echo ""
+          '';
+        };
+
+        # ── Hyprland integration binaries ──────────────────────────────────────
+        # Build with: nix build .#owasaka-bar   nix build .#owasaka-notify
+        packages.owasaka-bar = pkgs.buildGoModule {
+          pname = "owasaka-bar";
+          version = "0.1.0-dev";
+          src = ./.;
+          subPackages = [ "cmd/owasaka-bar" ];
+          vendorHash = "sha256-xuDo0gyZggTNtdUdlZoLWs/7dqtebygKPVd1l7L3CAw=";
+          nativeBuildInputs = [ pkgs.pkg-config ];
+          buildInputs = [ pkgs.libpcap ];
+          checkPhase = "true";
+          meta.description = "O.W.A.S.A.K.A. Waybar live module";
+        };
+
+        packages.owasaka-notify = pkgs.buildGoModule {
+          pname = "owasaka-notify";
+          version = "0.1.0-dev";
+          src = ./.;
+          subPackages = [ "cmd/owasaka-notify" ];
+          vendorHash = "sha256-xuDo0gyZggTNtdUdlZoLWs/7dqtebygKPVd1l7L3CAw=";
+          nativeBuildInputs = [ pkgs.pkg-config ];
+          buildInputs = [ pkgs.libpcap ];
+          checkPhase = "true";
+          meta.description = "O.W.A.S.A.K.A. SwayNC notification daemon";
+        };
+
+        # ── Desktop UI package (requires Fyne vendor: go get fyne.io/fyne/v2) ──
+        # Build with: nix build .#oswaka-ui
+        # Needs libGL + X11 headers present; disabled on non-Linux.
+        packages.oswaka-ui = pkgs.lib.mkIf pkgs.stdenv.isLinux (pkgs.buildGoModule {
+          pname = "oswaka-ui";
+          version = "0.1.0-dev";
+          src = ./.;
+          subPackages = [ "cmd/oswaka-ui" ];
+          tags = [ "fyne" ];
+          vendorHash = null; # update after: go get fyne.io/fyne/v2 && go mod vendor
+          nativeBuildInputs = [ pkgs.pkg-config ];
+          buildInputs = with pkgs; [
+            libGL
+            xorg.libX11
+            xorg.libXcursor
+            xorg.libXi
+            xorg.libXxf86vm
+          ];
+          checkPhase = "true";
+          meta.description = "O.W.A.S.A.K.A. native desktop UI (Fyne)";
+        });
+
         # Package definition (for building oswaka)
         packages.default = pkgs.buildGoModule {
           pname = "oswaka";
@@ -536,6 +693,45 @@
       #   pkgs = import nixpkgs { overlays = [ owasaka.overlays.default ]; };
       overlays.default = final: prev: {
         oswaka = self.packages.${final.system}.default;
+      };
+
+      # ── Honeypot NixOS module (Wave E) ─────────────────────────────────────────
+      # Consumers import this alongside microvm.nixosModules.microvm and set
+      # owasaka.honeypot.enable = true and owasaka.honeypot.webhookURL = "...".
+      nixosModules.honeypot = import ./nix/honeypot.nix;
+
+      # ── Honeypot smoke-test VM (x86_64-linux only) ─────────────────────────────
+      # Instantiates a disposable 128 MB honeypot with a placeholder webhook for
+      # local testing.  Run with:
+      #   nix run .#honeypot-vm
+      # For production, generate a real slug via POST /api/admin/honeypot and
+      # add a new nixosConfiguration with that webhookURL.
+      nixosConfigurations.honeypot-test = nixpkgs.lib.nixosSystem {
+        system  = "x86_64-linux";
+        modules = [
+          microvm.nixosModules.microvm
+          self.nixosModules.honeypot
+          {
+            microvm = {
+              mem      = 512;
+              vcpu     = 1;
+              hypervisor = "qemu";
+              interfaces = [{
+                type = "tap";
+                id   = "vm-hp-test";
+                mac  = "02:00:00:00:00:01";
+              }];
+            };
+            owasaka.honeypot.enable     = true;
+            owasaka.honeypot.webhookURL = "http://localhost:8080/api/canary/webhook/TEST_SLUG_00000000";
+          }
+        ];
+      };
+
+      # Convenience app: `nix run .#honeypot-vm` boots the test VM via QEMU.
+      apps."x86_64-linux".honeypot-vm = {
+        type    = "app";
+        program = "${self.nixosConfigurations.honeypot-test.config.microvm.runner.qemu}/bin/microvm-run";
       };
 
       # ── NixOS Module ───────────────────────────────────────────────────────────
