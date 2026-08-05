@@ -4,7 +4,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=1 go build -o /owasaka ./cmd/oswaka
+RUN CGO_ENABLED=1 go build -o /owasaka ./cmd/oswaka && go mod vendor
 
 FROM alpine:3.20
 RUN apk add --no-cache libpcap ca-certificates
